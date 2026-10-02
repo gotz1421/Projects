@@ -9,6 +9,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -74,7 +75,16 @@ class BubbleService : Service() {
     }
 
     private lateinit var wm: WindowManager
+    /** The overlay window's root. Its alpha/visibility is owned by the show/hide gating. */
     private var container: FrameLayout? = null
+    /**
+     * The visible disc inside [container]. Its alpha is the user's idle transparency, kept
+     * separate from [container]'s so the gating logic (which reads container alpha to decide
+     * "shown or hidden") is unaffected by the opacity setting.
+     */
+    private var body: FrameLayout? = null
+    private var idleOpacity = BubblePrefs.DEFAULT_OPACITY
+    private var touching = false
     private var iconView: ImageView? = null
     private var waveView: WaveformView? = null
     private lateinit var params: WindowManager.LayoutParams
@@ -92,6 +102,12 @@ class BubbleService : Service() {
     @Volatile private var gateSetting = true
     private var fieldFocused = false
     private var recording = false
+
+    // Keyboard avoidance: the overlay is drawn under the IME, so while the keyboard is up we
+    // lift the bubble above it and put it back when the keyboard goes away.
+    private var imeTop: Int? = null
+    /** The user's own y, remembered while the bubble is lifted above the keyboard. */
+    private var homeY: Int? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -169,17 +185,21 @@ class BubbleService : Service() {
         val pad = (14 * density).toInt()
 
         bubbleSize = size
-        val frame = FrameLayout(this).apply {
+        idleOpacity = BubblePrefs.opacity(this)
+        val frame = FrameLayout(this)
+        val disc = FrameLayout(this).apply {
             background = ContextCompat.getDrawable(this@BubbleService, R.drawable.bubble_background)
             elevation = 8 * density
+            alpha = idleOpacity
         }
+        frame.addView(disc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val icon = ImageView(this).apply {
             setImageResource(R.drawable.ic_aperture)
             setPadding(pad, pad, pad, pad)
         }
         val wave = WaveformView(this).apply { visibility = View.GONE }
-        frame.addView(icon, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        frame.addView(wave, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        disc.addView(icon, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        disc.addView(wave, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -251,6 +271,8 @@ class BubbleService : Service() {
         frame.setOnTouchListener { _, e ->
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    touching = true
+                    applyOpacity()
                     downRawX = e.rawX
                     downRawY = e.rawY
                     startX = params.x
@@ -288,6 +310,8 @@ class BubbleService : Service() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     mainHandler.removeCallbacks(longPress)
+                    touching = false
+                    applyOpacity()
                     if (longFired) {
                         // Release ends the take. ACTION_CANCEL lands here too, deliberately:
                         // if the window system takes the gesture away mid-hold we must not
@@ -308,7 +332,11 @@ class BubbleService : Service() {
                     }
                     hideDismiss()
                     overDismiss = false
-                    if (moved) BubblePrefs.setPosition(this@BubbleService, params.x, params.y)
+                    if (moved) {
+                        // A deliberate drag is the user's new home, keyboard up or not.
+                        homeY = null
+                        BubblePrefs.setPosition(this@BubbleService, params.x, params.y)
+                    }
                     if (!moved) onTap()
                     true
                 }
@@ -317,6 +345,7 @@ class BubbleService : Service() {
         }
 
         container = frame
+        body = disc
         iconView = icon
         waveView = wave
         try {
@@ -415,8 +444,9 @@ class BubbleService : Service() {
     fun showRecording() {
         recording = true
         ensureVisible()
-        container?.background =
+        body?.background =
             ContextCompat.getDrawable(this, R.drawable.bubble_background_recording)
+        applyOpacity()
         iconView?.visibility = View.GONE
         waveView?.visibility = View.VISIBLE
         startPulse()
@@ -429,8 +459,9 @@ class BubbleService : Service() {
     fun showIdle() {
         recording = false
         stopPulse()
-        container?.background =
+        body?.background =
             ContextCompat.getDrawable(this, R.drawable.bubble_background)
+        applyOpacity()
         waveView?.visibility = View.GONE
         iconView?.visibility = View.VISIBLE
         applyGating(animate = true) // re-hide if gated and no field is focused
@@ -444,12 +475,15 @@ class BubbleService : Service() {
     private fun shouldShow(): Boolean = recording || fieldFocused || !gateActive()
 
     /**
-     * Called by the accessibility service when a host app's editable field gains or
-     * loses input focus. No-op when gating is off (bubble is always visible then).
+     * Called by the accessibility service when the user can or can't type: a host app's
+     * editable field gained/lost focus, or the keyboard opened/closed. [imeBounds] is the
+     * keyboard's on-screen rect, or null when no keyboard is showing. Gating only affects
+     * visibility when enabled; keyboard avoidance applies either way.
      */
-    fun setFieldFocused(focused: Boolean) {
+    fun setFieldFocused(focused: Boolean, imeBounds: Rect?) {
         mainHandler.post {
             fieldFocused = focused
+            avoidKeyboard(imeBounds?.top)
             // Reconcile against the *actual* shown state (incl. alpha), so a transition
             // that left the view VISIBLE-but-transparent can't strand it hidden.
             if (shouldShow() != isShown()) applyGating(animate = true)
@@ -460,6 +494,55 @@ class BubbleService : Service() {
     private fun isShown(): Boolean {
         val c = container ?: return false
         return c.visibility == View.VISIBLE && c.alpha > 0.01f
+    }
+
+    /** Re-read the idle transparency (e.g. after the Settings slider moves). */
+    fun refreshOpacity() {
+        mainHandler.post {
+            idleOpacity = BubblePrefs.opacity(this)
+            applyOpacity()
+        }
+    }
+
+    /** Fully opaque while touched or recording; the user's idle transparency otherwise. */
+    private fun applyOpacity() {
+        body?.alpha = if (touching || recording) 1f else idleOpacity
+    }
+
+    /**
+     * Keep the bubble out from under the keyboard. Lift it when the keyboard would cover it,
+     * restore the user's position when the keyboard closes. Never persisted: the lifted spot
+     * is a function of the keyboard height, not a place the user chose.
+     */
+    private fun avoidKeyboard(top: Int?) {
+        val c = container ?: return
+        if (touching) return // never yank the bubble out from under a finger; next check retries
+        if (top == imeTop) return
+        imeTop = top
+        val baseY = homeY ?: params.y
+        val targetY = if (top == null) {
+            baseY
+        } else {
+            // params.y is window-relative (usually below the status bar) while the IME rect is
+            // in screen coordinates, so convert the keyboard top into the bubble's space.
+            val loc = IntArray(2)
+            c.getLocationOnScreen(loc)
+            // A hidden (GONE) view has no location yet; assume the status bar offset then. Over-
+            // estimating only lifts the bubble a little higher, which is harmless.
+            val offset = if (c.visibility == View.VISIBLE && c.isAttachedToWindow) loc[1] - params.y else statusBarHeight()
+            val margin = (12 * resources.displayMetrics.density).toInt()
+            BubblePrefs.yAboveKeyboard(baseY, bubbleSize, top - offset, margin)
+        }
+        homeY = if (top != null && targetY != baseY) baseY else null
+        if (params.y == targetY) return
+        params.y = targetY
+        try { wm.updateViewLayout(c, params) } catch (_: Exception) {}
+    }
+
+    @SuppressLint("InternalInsetResource", "DiscouragedApi")
+    private fun statusBarHeight(): Int {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else 0
     }
 
     /** Re-read the gating preference and apply (e.g. after accessibility connects). */
@@ -548,6 +631,7 @@ class BubbleService : Service() {
         container?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
         dismissView?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
         container = null
+        body = null
         iconView = null
         waveView = null
         dismissView = null

@@ -9,7 +9,9 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.voicerewriter"
+        // ".alt" so this fork installs next to the Play Store OpenWispr instead of colliding
+        // with it (same id + different signature = install refused).
+        applicationId = "com.voicerewriter.alt"
         minSdk = 24
         // Play requires targetSdk 36 for every update from 31 Aug 2026. See the API 36
         // behaviour changes handled in this migration (edge-to-edge, predictive back,
@@ -32,6 +34,15 @@ android {
     // build is simply left unsigned; debug builds use the standard debug keystore as always.
     val releaseKeystore = System.getenv("OPENWISPR_KEYSTORE_FILE")
     signingConfigs {
+        // A committed, non-secret debug key (standard "android" passwords). CI runners generate
+        // a fresh ~/.android/debug.keystore every run, so without this each build would be
+        // signed differently and Android would refuse to install it over the previous one.
+        getByName("debug") {
+            storeFile = rootProject.file("alt-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = file(releaseKeystore)

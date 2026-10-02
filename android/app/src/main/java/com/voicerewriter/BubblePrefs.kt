@@ -23,6 +23,11 @@ object BubblePrefs {
     private const val KEY_ENABLED = "enabled"
     private const val KEY_X = "x"
     private const val KEY_Y = "y"
+    private const val KEY_OPACITY = "opacity"
+
+    /** Idle opacity of the bubble. Semi-transparent so it doesn't hide what's underneath. */
+    const val DEFAULT_OPACITY = 0.55f
+    const val MIN_OPACITY = 0.2f
 
     /** Sentinel for "never positioned", so a genuine 0 coordinate is not mistaken for unset. */
     const val UNSET = Int.MIN_VALUE
@@ -49,6 +54,31 @@ object BubblePrefs {
 
     fun setPosition(ctx: Context, x: Int, y: Int) {
         prefs(ctx).edit().putInt(KEY_X, x).putInt(KEY_Y, y).apply()
+    }
+
+    /**
+     * How opaque the bubble is while idle (0.2–1.0). It goes fully opaque while touched or
+     * recording, so the transparency never makes the live state hard to see.
+     */
+    fun opacity(ctx: Context): Float = clampOpacity(prefs(ctx).getFloat(KEY_OPACITY, DEFAULT_OPACITY))
+
+    fun setOpacity(ctx: Context, value: Float) {
+        prefs(ctx).edit().putFloat(KEY_OPACITY, clampOpacity(value)).apply()
+    }
+
+    fun clampOpacity(value: Float): Float = value.coerceIn(MIN_OPACITY, 1f)
+
+    /**
+     * Where the bubble should sit while the keyboard is up, given where it normally lives.
+     *
+     * The bubble is a TYPE_APPLICATION_OVERLAY window, which the system always draws *below*
+     * the keyboard. So a bubble the user parked in the bottom half of the screen was simply
+     * covered whenever they started typing. If it would overlap the keyboard, lift it to sit
+     * just above it; otherwise leave it where it is. Returns the y to use. Pure, for tests.
+     */
+    fun yAboveKeyboard(bubbleY: Int, size: Int, imeTop: Int, margin: Int): Int {
+        if (bubbleY + size <= imeTop - margin) return bubbleY
+        return (imeTop - size - margin).coerceAtLeast(0)
     }
 
     /**

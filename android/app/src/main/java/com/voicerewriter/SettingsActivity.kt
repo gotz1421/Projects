@@ -132,6 +132,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
     var vadAutoStop by remember { mutableStateOf(true) }
     var parakeetHotwordsExperimental by remember { mutableStateOf(false) }
     var bubbleOnlyOnFields by remember { mutableStateOf(true) }
+    var bubbleOpacity by remember { mutableStateOf(BubblePrefs.opacity(context)) }
     var keepHistory by remember { mutableStateOf(DictationHistory.keepHistory(context)) }
     var audioKeepDays by remember { mutableStateOf(PendingAudio.keepDays(context)) }
 
@@ -500,6 +501,24 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                         else "Appear only when you can type",
                         bubbleOnlyOnFields,
                     ) { bubbleOnlyOnFields = it; persist() }
+                    Divider()
+                    // Idle transparency. Live-applied so the user sees the bubble change as they
+                    // drag; it still goes fully opaque while touched or recording.
+                    Column {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Bubble opacity", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text("${(bubbleOpacity * 100).toInt()}%", style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Slider(
+                            value = bubbleOpacity,
+                            onValueChange = {
+                                bubbleOpacity = it
+                                BubblePrefs.setOpacity(context, it)
+                                BubbleService.instance?.refreshOpacity()
+                            },
+                            valueRange = BubblePrefs.MIN_OPACITY..1f,
+                        )
+                    }
                 }
             }
 

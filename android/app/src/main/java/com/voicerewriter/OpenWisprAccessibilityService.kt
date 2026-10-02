@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -77,11 +78,15 @@ class OpenWisprAccessibilityService : AccessibilityService() {
         /** Re-check focus now (e.g. when the bubble (re)starts) so it shows if a field is already focused. */
         fun reevaluate() {
             val svc = instance ?: return
-            svc.main.post { svc.evaluateFieldFocus() }
+            svc.fieldHandler.post { svc.evaluateFieldFocus() }
         }
     }
 
     private val main = Handler(Looper.getMainLooper())
+    // Field checks get their own handler: the insert path clears `main` wholesale
+    // (removeCallbacksAndMessages(null)), which used to drop a pending focus check too.
+    private val fieldHandler = Handler(Looper.getMainLooper())
+    private var fieldCheckPending = false
     @Volatile private var pendingText: String? = null
     private val retryDelays = longArrayOf(250, 500, 900, 1400, 2000)
 
@@ -92,15 +97,35 @@ class OpenWisprAccessibilityService : AccessibilityService() {
         // Now that focus detection is available, let the bubble switch to its
         // "only show on text fields" behavior (it starts always-visible without us).
         BubbleService.instance?.refreshGating()
-        main.post { evaluateFieldFocus() }
+        fieldHandler.post { evaluateFieldFocus() }
     }
 
-    /** Debounced re-check of whether a host text field is focused (drives the bubble). */
-    private val fieldCheck = Runnable { evaluateFieldFocus() }
+    /** Throttled re-check of whether the user can type (drives the bubble). */
+    private val fieldCheck = Runnable { fieldCheckPending = false; evaluateFieldFocus() }
 
     /**
-     * Tell the bubble whether the foreground app currently has a focused editable
-     * field. Skips our own windows so the recording sheet doesn't flap the bubble.
+     * Throttle, not debounce. A debounce re-armed on every TYPE_WINDOW_CONTENT_CHANGED never
+     * fires in apps that redraw constantly (chats with typing indicators, video, live feeds),
+     * so the bubble never appeared there. A throttle guarantees a check every ~120 ms.
+     */
+    private fun scheduleFieldCheck() {
+        if (fieldCheckPending) return
+        fieldCheckPending = true
+        fieldHandler.postDelayed(fieldCheck, 120)
+    }
+
+    /**
+     * Tell the bubble whether the user can type right now, and where the keyboard is.
+     *
+     * Two signals, either is enough:
+     *  - a keyboard (IME) window is on screen. This is the one that works everywhere: Flutter,
+     *    React Native, games, WebViews and many chat apps never expose an `isEditable` node with
+     *    input focus, but the keyboard window itself is reported by the system for every IME
+     *    (Gboard, Samsung, SwiftKey, ...). Needs flagRetrieveInteractiveWindows (set in config).
+     *  - a focused editable node in a host window (the original check; covers hardware keyboards
+     *    and the moment before the IME finishes animating in).
+     *
+     * Skips our own windows so the recording sheet doesn't flap the bubble.
      */
     private fun evaluateFieldFocus() {
         // Scan all interactive windows, not just rootInActiveWindow — across an app
@@ -114,12 +139,21 @@ class OpenWisprAccessibilityService : AccessibilityService() {
             val editable = f != null && f.isEditable
             @Suppress("DEPRECATION") f?.recycle()
             Log.d(TAG, "fieldFocus(fallback) editable=$editable")
-            BubbleService.instance?.setFieldFocused(editable)
+            BubbleService.instance?.setFieldFocused(editable, null)
             return
         }
         var editable = false
         var ourModalActive = false
+        var imeBounds: Rect? = null
         for (w in wins) {
+            if (w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) {
+                val r = Rect()
+                w.getBoundsInScreen(r)
+                // A collapsed/hidden IME can linger as a zero-height window.
+                if (r.height() > 0) imeBounds = r
+                continue
+            }
+            if (editable) continue
             val root = w.root ?: continue
             if (root.packageName == packageName) {
                 // Our recording/transform sheet (an activity) — don't flap the bubble.
@@ -132,11 +166,11 @@ class OpenWisprAccessibilityService : AccessibilityService() {
                 if (f.isEditable) editable = true
                 @Suppress("DEPRECATION") f.recycle()
             }
-            if (editable) break
         }
         if (ourModalActive) return // leave the bubble as-is while our sheet is up
-        Log.d(TAG, "fieldFocus editable=$editable host=$lastHostPackage")
-        BubbleService.instance?.setFieldFocused(editable)
+        val canType = editable || imeBounds != null
+        Log.d(TAG, "fieldFocus editable=$editable ime=$imeBounds host=$lastHostPackage")
+        BubbleService.instance?.setFieldFocused(canType, imeBounds)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -153,9 +187,9 @@ class OpenWisprAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
             AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                main.removeCallbacks(fieldCheck)
-                main.postDelayed(fieldCheck, 120)
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                scheduleFieldCheck()
             }
         }
         if (pendingText == null) return
@@ -174,7 +208,8 @@ class OpenWisprAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        main.removeCallbacks(fieldCheck)
+        fieldHandler.removeCallbacksAndMessages(null)
+        fieldCheckPending = false
         if (instance === this) instance = null
         // Service gone — focus detection is impossible, so let the bubble show always.
         BubbleService.instance?.refreshGating()

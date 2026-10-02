@@ -60,4 +60,35 @@ class BubblePrefsTest {
         // coerceIn(0, negative) would throw; the degenerate case has to collapse to 0.
         assertEquals(0 to 0, BubblePrefs.resolvePosition(500, 500, 48, 600, 100, 100, 400))
     }
+
+    // ---- keyboard avoidance ----
+
+    @Test
+    fun `a bubble clear of the keyboard stays put`() {
+        assertEquals(300, BubblePrefs.yAboveKeyboard(bubbleY = 300, size = 150, imeTop = 1400, margin = 30))
+    }
+
+    @Test
+    fun `a bubble the keyboard would cover is lifted just above it`() {
+        assertEquals(1400 - 150 - 30, BubblePrefs.yAboveKeyboard(bubbleY = 1800, size = 150, imeTop = 1400, margin = 30))
+    }
+
+    @Test
+    fun `a bubble partly under the keyboard is lifted too`() {
+        assertEquals(1220, BubblePrefs.yAboveKeyboard(bubbleY = 1300, size = 150, imeTop = 1400, margin = 30))
+    }
+
+    @Test
+    fun `a keyboard taller than the screen never pushes the bubble off the top`() {
+        assertEquals(0, BubblePrefs.yAboveKeyboard(bubbleY = 500, size = 150, imeTop = 50, margin = 30))
+    }
+
+    // ---- opacity ----
+
+    @Test
+    fun `opacity is clamped so the bubble can never become invisible`() {
+        assertEquals(BubblePrefs.MIN_OPACITY, BubblePrefs.clampOpacity(0f), 0f)
+        assertEquals(1f, BubblePrefs.clampOpacity(3f), 0f)
+        assertEquals(0.55f, BubblePrefs.clampOpacity(0.55f), 0f)
+    }
 }
