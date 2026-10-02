@@ -1,0 +1,38 @@
+package com.voicerewriter.textproc
+
+/**
+ * One personal-vocabulary term. The recognizer mishears proper nouns and jargon
+ * ("Rohit" -> "row hit", "Silero" -> "Silyro"); no cleanup can recover that, so we
+ * snap near-misses back to [canonical] after transcription (see [VocabCorrector]).
+ *
+ * - [canonical]: the correct spelling to insert ("Rohit", "Kubernetes").
+ * - [aliases]: explicit known mishearings ("row hit", "silyro") — always matched.
+ *   Fuzzy/phonetic matching also catches unlisted mishearings.
+ */
+data class VocabEntry(
+    val canonical: String,
+    val aliases: List<String> = emptyList(),
+    /**
+     * Optional text-expansion. When set, this is a *snippet*: speaking [canonical]
+     * (or an alias) inserts [expansion] verbatim instead — e.g. "my email" →
+     * "you@example.com", "my address" → a full address. Matched exactly only.
+     */
+    val expansion: String? = null,
+    /** Where this entry came from ("manual" or "contact") — affects bias priority. */
+    val source: String = "manual",
+    /**
+     * Subset of [aliases] added automatically by the inline-edit learn loop
+     * ([VocabRepository.learnFromEdit]). Tracked separately so the user can review and
+     * undo just the auto-learned ones — even when merged onto a manual/contact entry.
+     */
+    val learnedAliases: List<String> = emptyList(),
+) {
+    val isSnippet: Boolean get() = !expansion.isNullOrBlank()
+
+    /** All spoken forms to match against, longest (most tokens) first. */
+    fun matchPhrases(): List<String> =
+        (listOf(canonical) + aliases)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+}

@@ -1,0 +1,435 @@
+import AppKit
+import Combine
+import OpenWisprCore
+import SwiftUI
+
+/// App-scope orchestrator for the **hands-free** dictation flow: a global hotkey
+/// toggles a session, audio is captured with VAD auto-stop, transcribed, cleaned, and
+/// auto-inserted into whatever field had focus — all through a non-activating HUD so
+/// the user's text field never loses focus.
+///
+/// Deliberately separate from `DictationController` (the menu-bar popover flow): they
+/// own their own `AudioCapture`/`AppleSpeechSTT` so a popover session and a hotkey
+/// session can't stomp each other.
+///
+/// State machine:
+///
+///     idle ──hotkey──▶ listening ──┬─ VAD auto-stop ─┐
+///       ▲   (toggle)               └─ hotkey (toggle)─┴─▶ finish()
+///       │                                                     │
+///       │                          cancel (Cancel button)     ▼
+///       └──────────────────────────────────────────────▶ transcribing
+///                                                              │
+///                                          ┌───────────────────┤
+///                                          ▼                   ▼
+///                                       inserted/message     error
+///                                          │                   │
+///                                          └──── auto-hide ─────┴──▶ idle
+///
+/// `finish()` is reached by either the hotkey (manual stop) or the VAD auto-stop
+/// callback; an `isFinishing` guard makes whichever fires first win and the other a
+/// no-op. `cancel()` aborts a `listening` session without transcribing.
+@MainActor
+final class DictationCoordinator {
+
+    private enum State {
+        case idle
+        case listening
+        case transcribing
+    }
+
+    /// Shared, persisted settings. The hotkey + VAD sensitivity are read from here and
+    /// re-applied live via the Combine subscriptions below.
+    private let settings = AppSettings.shared
+    /// `var` (not `let`) so we can rebuild it when VAD sensitivity changes between sessions.
+    private var audio: AudioCapture
+    /// Resolved per-session from settings (Apple Speech or warm-cached Whisper).
+    private let hud = RecordingHUD()
+    /// Carbon toggle hotkey — used only when the trigger is `.hotkey`.
+    private var hotKey: HotKey?
+    /// fn press/release watcher — used only when the trigger is `.fnKey` (hold + double-tap).
+    private var fnMonitor: FnTriggerMonitor?
+    private var cancellables: Set<AnyCancellable> = []
+
+    private var state: State = .idle
+    /// A finish requested before the (async) `start()` went live; applied once it does.
+    private var pendingFinish = false
+    /// The app/field we'll insert back into — captured at session start. The HUD is
+    /// non-activating so this stays the user's app for the whole session.
+    private var targetApp: NSRunningApplication?
+    /// Drives the HUD level bar from `audio.amplitude`.
+    private var levelTimer: Timer?
+    /// Guards `finish()` against the hotkey + VAD auto-stop both firing.
+    private var isFinishing = false
+
+    /// The durable recording this session is working on (see `PendingAudioStore`). Cleared on
+    /// delivery; handed back on failure so Home can offer a retry.
+    private var pendingID: UUID?
+
+    /// Backstop: force-finish a session that runs too long (e.g. if VAD never detects a pause).
+    private var maxDurationTimer: Timer?
+    private let maxSessionSeconds: TimeInterval = 30
+
+    init() {
+        // Build the capture with the persisted VAD sensitivity (Silero, energy fallback).
+        let built = VADFactory.make(sensitivity: settings.vadSensitivity)
+        audio = AudioCapture(vad: built.vad, config: built.config)
+
+        hud.state.onStart = { [weak self] in self?.start() }
+        hud.state.onCancel = { [weak self] in self?.cancel() }
+        hud.state.onStop = { [weak self] in self?.finish() }
+
+        // Show the resting "Tap to talk" notch pill (when notch mode is on).
+        hud.configure(persistent: settings.useNotchHud)
+
+        // Install whichever trigger the user picked (fn hold/double-tap, or a toggle hotkey).
+        installTrigger()
+        observeSettings()
+    }
+
+    // MARK: - Live settings (Combine)
+
+    /// Re-install the trigger whenever the kind or the hotkey binding changes, and rebuild the VAD
+    /// when sensitivity changes (only while idle — never mid-session).
+    private func observeSettings() {
+        // Re-install on trigger-kind change or on either keycode/modifier change. `dropFirst` skips
+        // the initial value publish so we don't immediately re-install what `init` already set.
+        settings.$triggerKind
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.installTrigger() }
+            .store(in: &cancellables)
+
+        Publishers.CombineLatest(settings.$hotKeyCode, settings.$hotKeyModifiers)
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _, _ in self?.installTrigger() }
+            .store(in: &cancellables)
+
+        settings.$vadSensitivity
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] sensitivity in self?.rebuildVAD(for: sensitivity) }
+            .store(in: &cancellables)
+
+        // Show/hide the resting notch pill (and re-anchor the HUD) when the setting toggles.
+        settings.$useNotchHud
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] on in self?.hud.configure(persistent: on) }
+            .store(in: &cancellables)
+    }
+
+    /// Tear down both triggers and install the one the user selected. `.fnKey` gives hold-to-talk +
+    /// double-tap hands-free; `.hotkey` gives a press-to-toggle global shortcut.
+    private func installTrigger() {
+        // Drop both first (HotKey's deinit unregisters Carbon; the monitor removes its NSEvent taps).
+        hotKey = nil
+        fnMonitor?.stop()
+        fnMonitor = nil
+
+        switch settings.triggerKind {
+        case .fnKey:
+            let monitor = FnTriggerMonitor()
+            monitor.onStart = { [weak self] in self?.start() }
+            monitor.onFinish = { [weak self] in self?.finish() }
+            monitor.start()
+            fnMonitor = monitor
+        case .hotkey:
+            hotKey = HotKey(
+                keyCode: settings.hotKeyCode,
+                modifiers: settings.hotKeyModifiers
+            ) { [weak self] in self?.toggle() }
+        }
+    }
+
+    /// Rebuild `audio` from the new sensitivity ratios. Only safe while idle — swapping the
+    /// capture mid-session would discard in-flight samples, so if we're listening we skip;
+    /// the next session picks up the new VAD because `start()` reuses this `audio`.
+    private func rebuildVAD(for sensitivity: VADSensitivity) {
+        guard state == .idle else { return }
+        let built = VADFactory.make(sensitivity: sensitivity)
+        audio = AudioCapture(vad: built.vad, config: built.config)
+    }
+
+    // MARK: - Hotkey entry point
+
+    /// Idle → start; listening → manual stop. Ignored while transcribing.
+    private func toggle() {
+        switch state {
+        case .idle:        start()
+        case .listening:   finish()
+        case .transcribing: break // busy; ignore taps
+        }
+    }
+
+    // MARK: - Session lifecycle
+
+    private func start() {
+        // Idempotent: the fn monitor may call start() again (e.g. a double-tap's second press)
+        // while a session is already live or transcribing — ignore all but a fresh idle start.
+        guard state == .idle else { return }
+        pendingFinish = false
+        // Capture the target field's app now; our non-activating HUD won't change it.
+        targetApp = NSWorkspace.shared.frontmostApplication
+
+        Task { @MainActor in
+            let mic = await AppleSpeechSTT.requestMicrophoneAccess()
+            guard mic else {
+                hud.update(.error("Enable Microphone in System Settings."))
+                hud.show()
+                autoHide(after: 2.5)
+                return
+            }
+            // Speech permission is only needed for the Apple Speech provider (incl. the
+            // Whisper-model-not-downloaded fallback). Whisper itself needs only the mic.
+            if STTFactory.usesAppleSpeech() {
+                let speech = await AppleSpeechSTT.requestAuthorization()
+                guard speech else {
+                    hud.update(.error("Enable Speech Recognition in System Settings."))
+                    hud.show()
+                    autoHide(after: 2.5)
+                    return
+                }
+            }
+
+            do {
+                isFinishing = false
+                try audio.start(vadAutoStop: true) { [weak self] in
+                    // Fired on the main queue when the speaker pauses.
+                    Task { @MainActor in self?.finish() }
+                }
+                state = .listening
+                hud.update(.listening(level: 0))
+                hud.show()
+                startLevelTimer()
+                startMaxDurationTimer()
+                // A push-to-talk release that beat the async mic bring-up — finish now.
+                if pendingFinish { pendingFinish = false; finish() }
+            } catch {
+                returnToIdle()
+                hud.update(.error("Couldn't start the microphone."))
+                hud.show()
+                autoHide(after: 2.5)
+            }
+        }
+    }
+
+    /// Stop capture and run transcribe → clean → insert. Reached by manual stop
+    /// (hotkey) or VAD auto-stop; guarded so only the first call proceeds.
+    private func finish() {
+        guard !isFinishing else { return }
+        guard state == .listening else {
+            // Released before the async `start()` went live; finish the moment it does.
+            if state == .idle { pendingFinish = true }
+            return
+        }
+        isFinishing = true
+        stopLevelTimer()
+
+        let samples = audio.stop()
+        guard let samples = samples, !samples.isEmpty else {
+            returnToIdle()
+            hud.update(.error("Didn't catch anything."))
+            autoHide(after: 1.8)
+            return
+        }
+
+        // Write-ahead: the take is on disk before the first transcription attempt, so a failure
+        // from here on leaves a recording the user can run again instead of an error toast and
+        // nothing else. Not coupled to this attempt's success — nothing below deletes it.
+        let recording = PendingAudioStore.shared.begin(
+            samples: samples,
+            durationSec: max(1, samples.count / WavFile.sampleRate),
+            app: targetApp.map { NSRunningApplicationLike(bundleID: $0.bundleIdentifier, localizedName: $0.localizedName) },
+            engine: STTFactory.resolvedProvider().rawValue
+        )
+        pendingID = recording?.id
+
+        state = .transcribing
+        hud.update(.transcribing)
+        transcribe(samples, using: STTFactory.make())
+    }
+
+    /// Transcribe → clean → polish → deliver. Split out of `finish()` so a retry from saved
+    /// audio runs the identical pipeline rather than a second, subtly different one.
+    private func transcribe(_ samples: [Float], using stt: STT) {
+        // Personalization L1: bias STT toward the user's vocab, then snap mis-hearings back.
+        let bias = VocabStore.shared.biasTerms
+        let vocab = VocabStore.shared.entries
+        Task { @MainActor in
+            do {
+                let raw = try await stt.transcribe(samples, sampleRate: 16000, bias: bias)
+                let corrected = VocabCorrector.correct(raw, vocab)
+                // Smart cleanup (deterministic pass) is user-toggleable; off → pass the
+                // vocab-corrected transcript through untouched.
+                let cleaned = settings.smartCleanup ? TextProcessor.process(corrected) : corrected
+                let category = AppContext.categoryFor(targetApp?.bundleIdentifier, cleaned)
+                // Optional on-device LLM polish (+ L3 corpus few-shot) on top of cleanup.
+                let polished = await applyPolish(cleaned, category: category)
+                // Record the accepted dictation as personalization fuel (L2 corpus).
+                CorpusStore.shared.record(
+                    cleaned: polished, kept: polished, category: category.key,
+                    edited: false, at: Date().timeIntervalSince1970
+                )
+                deliver(polished)
+            } catch let error as STTError {
+                fail(Self.message(for: error))
+            } catch {
+                fail(error.localizedDescription)
+            }
+        }
+    }
+
+    /// A failed attempt. The saved recording is deliberately left alone — this is precisely
+    /// what it was written for — and handed back so Home lists it as unfinished with a retry.
+    /// A failed attempt. The saved recording is deliberately left alone — this is precisely
+    /// what it was written for — and handed back so Home lists it as unfinished with a retry.
+    private func fail(_ message: String) {
+        returnToIdle()
+        if let id = pendingID {
+            PendingAudioStore.shared.release(id)
+            pendingID = nil
+            hud.update(.error("\(message) Your recording is saved. Retry it from OpenWispr."))
+            autoHide(after: 3.5)
+        } else {
+            hud.update(.error(message))
+            autoHide(after: 2.0)
+        }
+    }
+
+    /// Run the on-device LLM polish over the deterministic-cleaned text, if the user enabled a
+    /// polish level and its model is downloaded. Falls back to the input on any miss (no model,
+    /// load failure, or an over-edit guard trip — handled inside `LocalLLMEngine`). The focused
+    /// app sets the tone category.
+    private func applyPolish(_ text: String, category: AppContext.Category) async -> String {
+        let level = settings.polishLevel
+        guard level != .off else { return text }
+        let manager = LlmModelManager.shared
+        let model = settings.llmModel
+        guard manager.isDownloaded(model) else { return text }
+        // L3: inject the closest past corrections as few-shot examples.
+        let fewShot = CorrectionCorpus.fewShotBlock(
+            CorpusStore.shared.similar(query: text, category: category.key, k: 2)
+        )
+        return await LocalLLMEngine.shared.polish(
+            text, level: level, category: category,
+            modelPath: manager.fileURL(for: model).path,
+            isFinetune: model.isFinetune,
+            fewShot: fewShot
+        )
+    }
+
+    /// Insert (when trusted) or copy (when not), then auto-hide and return to idle.
+    ///
+    /// History is written *before* the insert is attempted and regardless of how it goes: the
+    /// transcript's survival must not depend on a synthetic keystroke landing in someone else's
+    /// app. When the paste can't be confirmed the text is left on the clipboard and the HUD
+    /// says so — a clipboard the user can clear beats words they can never get back.
+    private func deliver(_ cleaned: String) {
+        if cleaned.isEmpty {
+            fail("Didn't catch anything.")
+            return
+        }
+
+        // Record the hands-free dictation in the shared history (same list as Home), unless the
+        // user turned history off in Settings ▸ Privacy.
+        if settings.keepHistory {
+            DictationHistoryStore.shared.add(cleaned)
+        }
+
+        switch TextInserter.isTrusted ? TextInserter.insert(cleaned, into: targetApp) : .failed {
+        case .inserted:
+            hud.update(.inserted)
+            autoHide(after: 1.0)
+        case .unverified:
+            hud.update(.message("Couldn't confirm the insert. It's on your clipboard."))
+            autoHide(after: 3.0)
+        case .failed:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(cleaned, forType: .string)
+            hud.update(.message(
+                TextInserter.isTrusted ? "Copied to your clipboard."
+                                       : "Copied. Grant Accessibility to auto-insert."
+            ))
+            autoHide(after: 2.5)
+        }
+
+        // Delivered and in history — only now may the recording be settled (and so become
+        // eligible for retention pruning).
+        if let id = pendingID {
+            PendingAudioStore.shared.settle(id, result: cleaned)
+            pendingID = nil
+        }
+        returnToIdle()
+    }
+
+    /// Cancel button: abandon a listening session without transcribing.
+    func cancel() {
+        guard state == .listening else { return }
+        isFinishing = true
+        stopLevelTimer()
+        _ = audio.stop()
+        returnToIdle()
+        hud.hide()
+    }
+
+    // MARK: - Helpers
+
+    /// Return to idle and tell the fn monitor the session is over, so a latched hands-free session
+    /// that ended on its own (VAD auto-stop, error, max duration) doesn't leave the monitor stale.
+    private func returnToIdle() {
+        state = .idle
+        pendingFinish = false
+        fnMonitor?.sessionDidEnd()
+    }
+
+    private func autoHide(after seconds: Double) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            // Only hide if we haven't started a new session in the meantime.
+            if state == .idle { hud.hide() }
+        }
+    }
+
+    private func startLevelTimer() {
+        levelTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.state == .listening else { return }
+                self.hud.update(.listening(level: self.audio.amplitude))
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        levelTimer = timer
+    }
+
+    private func stopLevelTimer() {
+        levelTimer?.invalidate()
+        levelTimer = nil
+        maxDurationTimer?.invalidate()
+        maxDurationTimer = nil
+    }
+
+    /// Force-finish after [maxSessionSeconds] so a session can't hang if VAD never fires.
+    private func startMaxDurationTimer() {
+        maxDurationTimer?.invalidate()
+        let timer = Timer(timeInterval: maxSessionSeconds, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.state == .listening else { return }
+                self.finish()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        maxDurationTimer = timer
+    }
+
+    private static func message(for error: STTError) -> String {
+        switch error {
+        case .unavailable:      return "Speech recognition isn't available."
+        case .notAuthorized:    return "Speech access denied. Enable in Settings."
+        case .noSpeechDetected: return "Didn't catch any speech."
+        case .failed(let reason): return "Transcription failed: \(reason)"
+        }
+    }
+}

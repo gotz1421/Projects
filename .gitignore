@@ -1,0 +1,57 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives (branding lives unpacked in design_assets/)
+*.zip
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local notes / scratch
+NOTES.md
+scratch/
+claude_runtime.txt
+claude_session.txt
+
+__pycache__/
+
+# Android build artifacts are ignored by android/.gitignore; this is a backstop
+**/build/
+**/.gradle/
+**/local.properties
+**/.cxx/
+
+# Swift Package Manager
+/.build/
+**/.build/
+.swiftpm/
+
+# Xcode
+xcuserdata/
+*.xcodeproj/*.xcuserdatad/
+DerivedData/
+*.xcuserstate
+
+# macOS packaging artifacts (Release build + .dmg output)
+macos/App/build-release/
+macos/App/build-eval/
+macos/App/build-bench/
+macos/dist/
+*.dmg
+
+# Vendored sherpa-onnx AAR (on-device Parakeet/Moonshine STT) — 37MB prebuilt binary,
+# regenerable from the k2-fsa/sherpa-onnx release. See android/app/libs/REGENERATE.md.
+android/app/libs/*.aar
+
+# Vendored sherpa-onnx + onnxruntime xcframeworks for macOS on-device Parakeet STT — large
+# prebuilt binaries, regenerable via macos/SherpaOnnxFramework/fetch-binaries.sh.
+macos/SherpaOnnxFramework/binaries/

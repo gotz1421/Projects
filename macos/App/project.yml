@@ -1,0 +1,66 @@
+name: OpenWispr
+options:
+  bundleIdPrefix: com.openwispr
+  deploymentTarget:
+    # 13.3 is the min-OS of the vendored whisper.xcframework's macOS slice.
+    macOS: "13.3"
+  createIntermediateGroups: true
+  # NOTE: regenerate via ./generate.sh (not `xcodegen generate` directly). XcodeGen 2.45
+  # emits the Xcode-16 format (objectVersion 77); generate.sh pins it back to 56 so the
+  # project also opens in Xcode 15.x. No Xcode-16-only constructs are used.
+packages:
+  OpenWisprCore:
+    # Local Swift package with the ported deterministic pipeline + vocab/context layer.
+    path: ../OpenWisprCore
+  WhisperFramework:
+    # Local Swift package wrapping the whisper.cpp xcframework (remote binaryTarget — the
+    # ~50 MB binary is fetched & cached by SwiftPM, not committed).
+    path: ../WhisperFramework
+  LlamaFramework:
+    # Local Swift package wrapping the llama.cpp xcframework (remote binaryTarget — the
+    # ~200 MB binary is fetched & cached by SwiftPM, not committed).
+    path: ../LlamaFramework
+  SherpaOnnxFramework:
+    # Local Swift package wrapping the sherpa-onnx + onnxruntime xcframeworks (remote
+    # binaryTargets — fetched & cached by SwiftPM, not committed). Powers on-device Parakeet STT.
+    path: ../SherpaOnnxFramework
+settings:
+  base:
+    # Matches the git tag and Android versionName from 1.1.0 on — see android/app/build.gradle.kts.
+    MARKETING_VERSION: "1.4.0"
+    CURRENT_PROJECT_VERSION: "7"
+    SWIFT_VERSION: "5.10"
+    # Stable self-signed identity so the app's code identity (and its Accessibility /
+    # Microphone grants) survive rebuilds — unlike ad-hoc ("-"), which changes every build.
+    # Run `scripts/setup-signing.sh` once to create it; falls back gracefully if absent only
+    # by re-setting this to "-". No Apple Developer account needed.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "OpenWispr Self-Signed"
+    DEVELOPMENT_TEAM: ""
+targets:
+  OpenWispr:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Resources   # bundled ggml-silero-v5.1.2.bin (neural VAD model)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.openwispr.mac
+        PRODUCT_NAME: OpenWispr
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: OpenWispr.entitlements
+        # Non-sandboxed: the Accessibility API can't drive other
+        # apps' text fields from inside the App Sandbox. Hardened runtime off for dev.
+        ENABLE_HARDENED_RUNTIME: NO
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: OpenWisprCore
+        product: OpenWisprCore
+      - package: WhisperFramework
+        product: WhisperFramework
+      - package: LlamaFramework
+        product: LlamaFramework
+      - package: SherpaOnnxFramework
+        product: SherpaOnnxFramework

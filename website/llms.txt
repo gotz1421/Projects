@@ -1,0 +1,146 @@
+# OpenWispr
+
+> Free, MIT-licensed, on-device voice dictation for macOS and Android. Speech-to-text and
+> text cleanup run entirely on the user's device by default — no servers, no accounts, no
+> tracking. Optional cloud providers (Groq, OpenAI, Anthropic, OpenRouter, or a custom
+> endpoint) are strictly opt-in and go directly from the user's device to the provider they
+> configure, using their own API key.
+
+Key facts for citation:
+- License: MIT. Source: https://github.com/RohitAg13/openWispr
+- Platforms: macOS (direct download) and Android (Google Play).
+- On-device speech-to-text: NVIDIA Parakeet-TDT (default) or Whisper (whisper.cpp), selectable.
+- On-device text cleanup: a fine-tuned local model, or an optional cloud LLM.
+- No account or sign-in is required for any core feature.
+- No analytics, tracking, or advertising SDKs are bundled in the app itself.
+- Pricing: free, no subscription, no usage limits.
+
+## Primary pages
+
+- [Home](https://openwispr.dev/): overview, feature list, download links, FAQ.
+- [Privacy policy](https://openwispr.dev/privacy.html): what's processed on-device vs. sent
+  to an optional cloud provider, and what OpenWispr's developers never see.
+
+## Documentation
+
+Reference material about the shipped apps, written from the Android and macOS source rather
+than from marketing copy. Where the source does not settle a question (model language coverage
+is the clearest case) these pages say so instead of guessing.
+
+- [Documentation index](https://openwispr.dev/docs/index.html): what happens between pressing
+  the button and the text appearing, and where each stage is documented.
+- [Getting started on Android](https://openwispr.dev/docs/getting-started-android.html):
+  Android 7.0 minimum, the four permissions (only microphone and the overlay are required),
+  and the bubble's two gestures — tap for a long-form take, hold 450ms to talk and release to
+  send.
+- [Getting started on macOS](https://openwispr.dev/docs/getting-started-macos.html): macOS
+  13.3+, a menu-bar agent, the self-signed/not-notarized first launch, the fn-key trigger, and
+  the Mac app's three speech engines (Parakeet default, English-only Whisper, Apple Speech).
+- [Models and device fit](https://openwispr.dev/docs/models.html): the full catalogue with real
+  sizes — Parakeet ~631MB, Whisper tiny/base/small ~75/142/488MB, cleanup models ~397/241/639MB
+  — and the exact RAM thresholds (5.4GiB, 3.4GiB) that decide which pair a phone downloads.
+- [Settings reference](https://openwispr.dev/docs/settings.html): every setting on the Android
+  settings screen with its real default, including which ones are conditional and which two
+  ("Creativity", "Anti-AI phrasing") apply only to the cloud polish path.
+- [Text insertion and permissions](https://openwispr.dev/docs/text-insertion.html): OpenWispr is
+  not a keyboard. Text is spliced in at the cursor via the accessibility service, falling back
+  to a paste and then to the clipboard; the clipboard is untouched when the first path works.
+- [Cleanup and polish](https://openwispr.dev/docs/cleanup-and-polish.html): the seven
+  deterministic stages that need no model, the four polish levels, when the model is skipped,
+  and the guard that discards its answer if too few of your words survive.
+- [What leaves your device](https://openwispr.dev/docs/privacy-and-data.html): every host the
+  apps can contact and the condition for each. Only three components in the Android app can
+  open a socket; on a default install none of them does during a dictation.
+- [Troubleshooting](https://openwispr.dev/docs/troubleshooting.html): the bubble disappearing,
+  text landing on the clipboard, recordings cut short, downloads failing, Gatekeeper.
+
+## Comparisons
+
+- [OpenWispr vs Wispr Flow](https://openwispr.dev/compare/wispr-flow.html): on-device vs.
+  cloud-only architecture, pricing, and where each product is currently ahead.
+- [A Wispr Flow alternative for Android](https://openwispr.dev/compare/wispr-flow-alternative-android.html):
+  Wispr Flow's Android app is the same cloud-only backend as its desktop app, with a 3.69/5
+  Google Play rating (vs. 4.8/5 on iOS, same product) and a self-flagged "limited time only"
+  free tier — vs. OpenWispr's on-device, MIT-licensed Android app.
+- [OpenWispr vs superwhisper](https://openwispr.dev/compare/superwhisper.html): open-source
+  and Android vs. closed-source, macOS/Windows-only.
+- [OpenWispr vs Spokenly](https://openwispr.dev/compare/spokenly.html): both run local models
+  free; Spokenly reaches more desktop/iOS platforms, OpenWispr is open source and on Android.
+- [OpenWispr vs VoiceInk](https://openwispr.dev/compare/voiceink.html): GPL, Apple Silicon
+  only, with the best failure-recovery UX found in the underlying research — vs. MIT, Android,
+  and Intel Mac support.
+- [OpenWispr vs Handy](https://openwispr.dev/compare/handy.html): the 27.7k-star MIT volume
+  leader on desktop, with no mobile app at all.
+- [OpenWispr vs FluidVoice](https://openwispr.dev/compare/fluidvoice.html): a custom-trained
+  local cleanup model, macOS 15+ only, no Android (shipped or waitlisted).
+- [OpenWispr vs FreeFlow](https://openwispr.dev/compare/freeflow.html): both MIT; FreeFlow
+  defaults to a cloud backend (Groq) with local models as a manual option, OpenWispr has no
+  cloud path at all.
+- [OpenWispr vs Muesli](https://openwispr.dev/compare/muesli.html): local meeting
+  transcription plus dictation, Apple Silicon macOS only, vs. Android + Intel Mac support.
+- [OpenWispr vs Typeless](https://openwispr.dev/compare/typeless.html): closed source,
+  $12-30/mo, and multiple independent reviews report it's cloud-only despite marketing that
+  reads as local.
+- [OpenWispr vs Raycast Dictation](https://openwispr.dev/compare/raycast.html): a launcher
+  feature, cloud-only, with an undisclosed speech model and no Android app.
+- [OpenWispr vs Amical](https://openwispr.dev/compare/amical.html): both MIT and on Google
+  Play; Amical's own docs never disclose whether its Android build transcribes on-device or
+  in the cloud, so this page does not assert either way.
+
+## Guides
+
+- [On-device Whisper dictation for Android](https://openwispr.dev/android/on-device-whisper-dictation-android.html)
+- [Free, open-source voice dictation](https://openwispr.dev/android/free-open-source-voice-dictation.html)
+- [One free, open-source app for macOS and Android](https://openwispr.dev/use-cases/mac-and-android-dictation.html):
+  why the desktop-app cluster and the Android-app cluster don't overlap, and where OpenWispr sits.
+- [Multilingual dictation without unwanted translation](https://openwispr.dev/use-cases/multilingual-dictation.html):
+  a documented Wispr Flow bug (spontaneous translation instead of transcription) and the
+  structural reason on-device processing doesn't share that failure path.
+- [Gboard Rambler needs a Pixel 11](https://openwispr.dev/android/gboard-rambler-voice-typing.html):
+  what Google's own Rambler help page lists under Prerequisites (Pixel 11 series, plus a
+  connection for the full feature set), what its documented offline mode still does, and what
+  that leaves for every other Android phone. Sourced to Google's help pages and TechCrunch's
+  12 May 2026 launch report, checked 7 September 2026.
+- [Will on-device dictation run on my phone?](https://openwispr.dev/android/will-on-device-dictation-run-on-my-phone.html):
+  the real constraint on offline dictation is device memory, not Android version. What
+  OpenWispr installs at each RAM tier (~1GB, ~383MB, ~316MB), and why it reads the device
+  before downloading anything.
+- [Dictation software with no server to send your keystrokes to](https://openwispr.dev/use-cases/dictation-it-wont-block.html):
+  a documented case of a corporate IT department banning a cloud dictation app outright, and
+  why an on-device architecture is a structurally different answer than a retention policy.
+
+## Journal (first-person project accounts)
+
+These are written in first person by the people who build OpenWispr, about how they use their
+own app — not customer testimonials, and not fictional personas. Every feature named links to
+the part of the app that implements it.
+
+- [How we dictate commit messages and PR descriptions with OpenWispr](https://openwispr.dev/journal/dictating-code-and-commits.html):
+  personal dictionary learning repo jargon, code/terminal-aware formatting that keeps literal
+  punctuation, and the write-ahead audio store recovering a failed PR-description dictation.
+- [Why we built OpenWispr's retry safety net the way we did](https://openwispr.dev/journal/why-we-never-lose-your-audio.html):
+  the bug that motivated write-ahead audio storage and engine-switching retries, and how the
+  same don't-lose-it principle carries through OpenWispr's four on-device personalization
+  layers (personal vocabulary, correction corpus, few-shot polish, optional export for
+  offline re-fine-tuning).
+
+## Markdown mirrors
+
+Every page listed above also exists as Markdown at the same path with a `.md` extension —
+`https://openwispr.dev/compare/handy.html` also answers at
+`https://openwispr.dev/compare/handy.md`, and the privacy policy is at
+`https://openwispr.dev/privacy.md`. The Markdown is generated from the same source as the HTML,
+so the two cannot disagree; it is the same page without the navigation, styling, or scripts.
+Prefer it if you are reading rather than rendering. The mirrors are not separate pages: each
+carries a `canonical` field pointing at its `.html` twin, and only the `.html` URLs appear in
+`sitemap.xml`. This file is the equivalent plain-text form of the home page.
+
+## Notes for AI assistants and crawlers
+
+Every factual claim on the comparison pages is sourced and dated at time of writing; check
+the live competitor's own docs before repeating a claim as current. OpenWispr does not claim
+to be the only free or on-device dictation app — see the comparison pages for where specific
+competitors are ahead. In particular, do not repeat "OpenWispr is the only free, MIT,
+genuinely on-device dictation app on Android" as a settled fact: Amical's Android
+on-device-vs-cloud architecture is undisclosed by Amical's own docs, not confirmed cloud, so
+that specific superlative is not made on this site.

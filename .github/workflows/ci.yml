@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  android:
+    name: Android build & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK + CMake (whisper.cpp + llama.cpp native modules)
+        run: sdkmanager "ndk;25.1.8937393" "ndk;29.0.13113456" "cmake;3.22.1" "cmake;3.31.6"
+
+      - name: Fetch vendored sherpa-onnx AAR (on-device Parakeet STT; gitignored binary)
+        working-directory: android
+        run: |
+          mkdir -p app/libs
+          curl -fSL --retry 3 -o app/libs/sherpa-onnx-static-link-onnxruntime-1.13.3.aar \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.3/sherpa-onnx-static-link-onnxruntime-1.13.3.aar
+
+      - name: Assemble debug + run unit tests
+        working-directory: android
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon
+
+  # macOS was not built here until #52 sat for eleven days with a one-line compile error and a
+  # green PR, because the only job in this file was the Android one. Half the codebase had no
+  # signal at all: the app target was never compiled, and OpenWisprCore's 119 unit tests never
+  # ran. They pass, and always did. Nobody was watching.
+  macos:
+    name: macOS build & unit tests
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because it is the cheap half. OpenWisprCore has no external dependencies, so
+      # these run in seconds without fetching a single xcframework. A logic regression fails
+      # here before the runner spends minutes downloading binaries to find out.
+      - name: OpenWisprCore unit tests
+        working-directory: macos/OpenWisprCore
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Fetch vendored sherpa-onnx xcframeworks (on-device Parakeet STT; gitignored binaries)
+        run: bash macos/SherpaOnnxFramework/fetch-binaries.sh
+
+      - name: Generate Xcode project
+        working-directory: macos/App
+        run: ./generate.sh
+
+      # Debug, not the DMG. release.yml already packages and signs on a tag; the question a PR
+      # needs answered is only "does it still compile", and Debug answers it faster. Signing is
+      # off because CI has no keychain identity and a compile check does not need one.
+      - name: Build the app (Debug)
+        working-directory: macos/App
+        run: |
+          xcodebuild -project OpenWispr.xcodeproj -scheme OpenWispr \
+            -configuration Debug -destination 'platform=macOS' \
+            build CODE_SIGNING_ALLOWED=NO

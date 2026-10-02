@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Only so the floating bubble can come back after a reboot; see BootReceiver. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:allowBackup="true"
+        android:extractNativeLibs="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OpenWispr">
+
+        <!-- Launcher: home (stats + recent dictations) -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.OpenWispr.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- First-run onboarding (also re-launchable from Settings) -->
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+        <!-- Settings / voice profile / API key (opened from Home) -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+        <!-- Personal dictionary management -->
+        <activity
+            android:name=".VocabActivity"
+            android:exported="false"
+            android:label="Personal dictionary" />
+        <activity
+            android:name=".LearnedVocabActivity"
+            android:exported="false"
+            android:label="Learned words" />
+        <activity
+            android:name=".StyleMemoryActivity"
+            android:exported="false"
+            android:label="Style memory" />
+        <activity
+            android:name=".ContactsImportActivity"
+            android:exported="false"
+            android:label="Import from contacts" />
+        <activity
+            android:name=".AppToneActivity"
+            android:exported="false"
+            android:label="Tone by app" />
+        <activity
+            android:name=".FixDictationActivity"
+            android:exported="false"
+            android:label="Fix a word"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.OpenWispr.Translucent" />
+
+        <!-- The "Rewrite" entry in the text-selection floating toolbar -->
+        <activity
+            android:name=".RewriteActivity"
+            android:exported="true"
+            android:label="@string/process_text_label"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.OpenWispr.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- Always-visible floating bubble; tap to rewrite clipboard text -->
+        <service
+            android:name=".BubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_rewrite_launcher" />
+        </service>
+
+        <!-- Writes dictated/rewritten text into the focused field of other apps -->
+        <service
+            android:name=".OpenWisprAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Restores the bubble after a reboot / app update, if the user had it on -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".BubbleControlReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.voicerewriter.START_BUBBLE" />
+                <action android:name="com.voicerewriter.STOP_BUBBLE" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>
