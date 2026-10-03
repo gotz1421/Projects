@@ -214,7 +214,7 @@ private fun OnboardingScreen(onLaunchDictation: () -> Unit, onGoHome: () -> Unit
 
     fun refreshPersonalization() {
         scope.launch {
-            val tone = withContext(Dispatchers.IO) { AppToneRepository(ctx).overrides().isNotEmpty() }
+            val tone = withContext(Dispatchers.IO) { AppToneRepository(ctx).load().let { d -> d.apps.isNotEmpty() || d.tones.values.any { it.isNotEmpty() } } }
             val vocab = withContext(Dispatchers.IO) { VocabRepository(ctx).get() }
             val samples = withContext(Dispatchers.IO) {
                 CorrectionCorpus.all(ctx).count { it.edited && it.cleaned != it.final }
