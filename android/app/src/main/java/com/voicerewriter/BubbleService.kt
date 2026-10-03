@@ -441,7 +441,7 @@ class BubbleService : Service() {
         recording = true
         processing = false
         ensureVisible()
-        body?.setState(FlowBubbleView.State.RECORDING)
+        body?.switchTo(FlowBubbleView.State.RECORDING)
         applyOpacity()
     }
 
@@ -454,14 +454,14 @@ class BubbleService : Service() {
         recording = false
         processing = true
         ensureVisible()
-        body?.setState(FlowBubbleView.State.PROCESSING)
+        body?.switchTo(FlowBubbleView.State.PROCESSING)
         applyOpacity()
     }
 
     fun showIdle() {
         recording = false
         processing = false
-        body?.setState(FlowBubbleView.State.IDLE)
+        body?.switchTo(FlowBubbleView.State.IDLE)
         applyOpacity()
         applyGating(animate = true) // re-hide if gated and no field is focused
     }

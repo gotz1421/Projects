@@ -84,7 +84,7 @@ class FlowBubbleView(context: Context) : View(context) {
         addUpdateListener { invalidate() }
     }
 
-    fun setState(newState: State) {
+    fun switchTo(newState: State) {
         if (newState == state) return
         previous = state
         state = newState
