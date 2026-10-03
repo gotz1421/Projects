@@ -1,6 +1,5 @@
 package com.voicerewriter
 
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -43,7 +42,8 @@ import kotlin.math.abs
  *
  * Recording itself runs in RewriteActivity (a visible activity legitimately holds
  * the mic on Android 14; a background overlay cannot start a mic service). While
- * recording, the activity calls back here to swap the bubble to a live waveform.
+ * recording and processing, the activity calls back here to switch the bubble's animated
+ * state (see [FlowBubbleView]).
  */
 class BubbleService : Service() {
 
@@ -82,14 +82,11 @@ class BubbleService : Service() {
      * separate from [container]'s so the gating logic (which reads container alpha to decide
      * "shown or hidden") is unaffected by the opacity setting.
      */
-    private var body: FrameLayout? = null
+    private var body: FlowBubbleView? = null
     private var idleOpacity = BubblePrefs.DEFAULT_OPACITY
     private var touching = false
-    private var iconView: ImageView? = null
-    private var waveView: WaveformView? = null
     private lateinit var params: WindowManager.LayoutParams
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var pulse: ValueAnimator? = null
 
     private var dismissView: View? = null
     private var overlayType = 0
@@ -102,6 +99,8 @@ class BubbleService : Service() {
     @Volatile private var gateSetting = true
     private var fieldFocused = false
     private var recording = false
+    /** Between the end of a take and the text landing: the bubble shows its working state. */
+    private var processing = false
 
     // Keyboard avoidance: the overlay is drawn under the IME, so while the keyboard is up we
     // lift the bubble above it and put it back when the keyboard goes away.
@@ -156,11 +155,16 @@ class BubbleService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
+    /** Rebuild the ongoing notification, e.g. after the app language changes. */
+    fun refreshNotification() {
+        runCatching { getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification()) }
+    }
+
     private fun buildNotification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Floating bubble", NotificationManager.IMPORTANCE_MIN)
+                NotificationChannel(CHANNEL_ID, tr("Burbuja flotante", "Floating bubble"), NotificationManager.IMPORTANCE_MIN)
             )
         }
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -170,9 +174,10 @@ class BubbleService : Service() {
             Notification.Builder(this)
         }
         return builder
-            .setSmallIcon(R.drawable.ic_aperture)
-            .setContentTitle("OpenWispr")
-            .setContentText("Tap to dictate · hold to talk, release to send")
+            .setSmallIcon(R.drawable.ic_voiceflow)
+            .setContentTitle("VoiceFlow")
+            .setContentText(tr("Toca para dictar · mantén presionado para hablar y suelta para enviar",
+                "Tap to dictate · hold to talk, release to send"))
             .setOngoing(true)
             .build()
     }
@@ -181,25 +186,15 @@ class BubbleService : Service() {
     private fun addBubble() {
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
-        val size = (56 * density).toInt()
-        val pad = (14 * density).toInt()
+        // The window is a little larger than the visible disc: the margin is room for the glow
+        // and for the rings that ripple outward while recording (see FlowBubbleView).
+        val size = (68 * density).toInt()
 
         bubbleSize = size
         idleOpacity = BubblePrefs.opacity(this)
         val frame = FrameLayout(this)
-        val disc = FrameLayout(this).apply {
-            background = ContextCompat.getDrawable(this@BubbleService, R.drawable.bubble_background)
-            elevation = 8 * density
-            alpha = idleOpacity
-        }
+        val disc = FlowBubbleView(this).apply { alpha = idleOpacity }
         frame.addView(disc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        val icon = ImageView(this).apply {
-            setImageResource(R.drawable.ic_aperture)
-            setPadding(pad, pad, pad, pad)
-        }
-        val wave = WaveformView(this).apply { visibility = View.GONE }
-        disc.addView(icon, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        disc.addView(wave, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -249,7 +244,7 @@ class BubbleService : Service() {
         // guess. Tap is the long-form one. Wispr Flow, Handy, Amical, FreeFlow and Muesli all
         // landed on this same split (see research/07-recommendations.md).
         val longPress = Runnable {
-            if (!moved && recordingStopper == null) {
+            if (!moved && recordingStopper == null && !processing) {
                 longFired = true
                 holdingToTalk = true
                 vibrate(longArrayOf(0, 28, 50, 28)) // double tick distinguishes hold from tap
@@ -346,8 +341,6 @@ class BubbleService : Service() {
 
         container = frame
         body = disc
-        iconView = icon
-        waveView = wave
         try {
             wm.addView(frame, params)
         } catch (e: Exception) {
@@ -424,6 +417,9 @@ class BubbleService : Service() {
     }
 
     private fun onTap() {
+        // While the last take is still being transcribed, a tap must not start a second one
+        // that would race it for the same text field.
+        if (processing) return
         vibrate(longArrayOf(0, 18))
         val stop = recordingStopper
         if (stop != null) mainHandler.post(stop) // stop the in-progress recording
@@ -443,27 +439,30 @@ class BubbleService : Service() {
 
     fun showRecording() {
         recording = true
+        processing = false
         ensureVisible()
-        body?.background =
-            ContextCompat.getDrawable(this, R.drawable.bubble_background_recording)
+        body?.setState(FlowBubbleView.State.RECORDING)
         applyOpacity()
-        iconView?.visibility = View.GONE
-        waveView?.visibility = View.VISIBLE
-        startPulse()
     }
 
     fun showAmplitude(amp: Int) {
-        waveView?.push(amp)
+        body?.setAmplitude(amp)
+    }
+
+    /** The take is done; transcribing and cleaning up. */
+    fun showProcessing() {
+        recording = false
+        processing = true
+        ensureVisible()
+        body?.setState(FlowBubbleView.State.PROCESSING)
+        applyOpacity()
     }
 
     fun showIdle() {
         recording = false
-        stopPulse()
-        body?.background =
-            ContextCompat.getDrawable(this, R.drawable.bubble_background)
+        processing = false
+        body?.setState(FlowBubbleView.State.IDLE)
         applyOpacity()
-        waveView?.visibility = View.GONE
-        iconView?.visibility = View.VISIBLE
         applyGating(animate = true) // re-hide if gated and no field is focused
     }
 
@@ -472,7 +471,7 @@ class BubbleService : Service() {
     /** Whether visibility should track focused text fields (needs accessibility on). */
     private fun gateActive(): Boolean = gateSetting && OpenWisprAccessibilityService.isEnabled
 
-    private fun shouldShow(): Boolean = recording || fieldFocused || !gateActive()
+    private fun shouldShow(): Boolean = recording || processing || fieldFocused || !gateActive()
 
     /**
      * Called by the accessibility service when the user can or can't type: a host app's
@@ -504,9 +503,9 @@ class BubbleService : Service() {
         }
     }
 
-    /** Fully opaque while touched or recording; the user's idle transparency otherwise. */
+    /** Fully opaque while touched or working; the user's idle transparency otherwise. */
     private fun applyOpacity() {
-        body?.alpha = if (touching || recording) 1f else idleOpacity
+        body?.alpha = if (touching || recording || processing) 1f else idleOpacity
     }
 
     /**
@@ -584,29 +583,6 @@ class BubbleService : Service() {
         }
     }
 
-    /** Gentle breathing animation while recording. */
-    private fun startPulse() {
-        stopPulse()
-        val c = container ?: return
-        pulse = ValueAnimator.ofFloat(1f, 1.12f).apply {
-            duration = 650
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            addUpdateListener { a ->
-                val v = a.animatedValue as Float
-                c.scaleX = v; c.scaleY = v
-            }
-            start()
-        }
-    }
-
-    private fun stopPulse() {
-        pulse?.cancel()
-        pulse = null
-        container?.scaleX = 1f
-        container?.scaleY = 1f
-    }
-
     private fun vibrate(timings: LongArray) {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (getSystemService(VibratorManager::class.java))?.defaultVibrator
@@ -627,13 +603,10 @@ class BubbleService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         mainHandler.removeCallbacksAndMessages(null)
-        stopPulse()
         container?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
         dismissView?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
         container = null
         body = null
-        iconView = null
-        waveView = null
         dismissView = null
         isRunning = false
         // The bubble going away mid-hold means no ACTION_UP is ever delivered, so clear the flag

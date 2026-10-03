@@ -1,21 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- OpenWispr brand: "muted sunset" (handoff identity). Hex column is authoritative. -->
-    <color name="brand_amber">#EDB079</color>
-    <color name="brand_coral">#E07B52</color>      <!-- primary -->
-    <color name="brand_coral_deep">#C7623C</color> <!-- pressed / deep accent -->
-    <color name="brand_rose">#C16560</color>
-    <color name="brand_plum">#4A2E27</color>
+    <!-- VoiceFlow palette. Kept in step with ui/Theme.kt; the hex values are authoritative. -->
+    <color name="flow_cyan">#22D3EE</color>      <!-- primary: button / accents -->
+    <color name="flow_blue">#0EA5E9</color>      <!-- secondary: states -->
+    <color name="flow_sky">#2563EB</color>       <!-- deep end of the gradient -->
+    <color name="flow_navy">#0B1929</color>      <!-- dark surface / processing -->
+    <color name="flow_mint">#A7F3D0</color>      <!-- waves / glow -->
+    <color name="flow_light">#E5E7EB</color>     <!-- secondary text / icons -->
+    <color name="flow_ink">#111827</color>       <!-- primary text -->
+    <color name="flow_white">#FFFFFF</color>
 
-    <!-- Surfaces & ink -->
-    <color name="cream_bg">#F6EFE6</color>
-    <color name="card">#FFFDFA</color>
-    <color name="mark_cream">#FCF8F4</color>
-    <color name="ink">#4B3A2E</color>
-    <color name="ink_soft">#7E6B5B</color>
-    <color name="hairline">#E7DECF</color>
-    <color name="tint_panel">#F3E6D6</color>
-
-    <!-- Splash background (solid coral, for the launch window) -->
-    <color name="splash_bg">#E07B52</color>
+    <!-- Splash: deep navy with the white microphone. -->
+    <color name="splash_bg">#0B1929</color>
+    <color name="window_bg">#F3F7FA</color>
 </resources>

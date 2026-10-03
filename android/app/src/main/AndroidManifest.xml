@@ -12,21 +12,30 @@
     <!-- Only so the floating bubble can come back after a reboot; see BootReceiver. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Tone by app: list the launchable apps so each tone can be assigned to specific ones. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
+        android:name=".VoiceFlowApp"
         android:allowBackup="true"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OpenWispr">
+        android:theme="@style/Theme.VoiceFlow">
 
         <!-- Launcher: home (stats + recent dictations) -->
         <activity
             android:name=".HomeActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.OpenWispr.Splash">
+            android:theme="@style/Theme.VoiceFlow.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -49,29 +58,29 @@
         <activity
             android:name=".VocabActivity"
             android:exported="false"
-            android:label="Personal dictionary" />
+            android:label="@string/label_vocab" />
         <activity
             android:name=".LearnedVocabActivity"
             android:exported="false"
-            android:label="Learned words" />
+            android:label="@string/label_learned" />
         <activity
             android:name=".StyleMemoryActivity"
             android:exported="false"
-            android:label="Style memory" />
+            android:label="@string/label_style" />
         <activity
             android:name=".ContactsImportActivity"
             android:exported="false"
-            android:label="Import from contacts" />
+            android:label="@string/label_contacts" />
         <activity
             android:name=".AppToneActivity"
             android:exported="false"
-            android:label="Tone by app" />
+            android:label="@string/label_tone" />
         <activity
             android:name=".FixDictationActivity"
             android:exported="false"
-            android:label="Fix a word"
+            android:label="@string/label_fix"
             android:excludeFromRecents="true"
-            android:theme="@style/Theme.OpenWispr.Translucent" />
+            android:theme="@style/Theme.VoiceFlow.Translucent" />
 
         <!-- The "Rewrite" entry in the text-selection floating toolbar -->
         <activity
@@ -81,7 +90,7 @@
             android:launchMode="singleTop"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.OpenWispr.Translucent">
+            android:theme="@style/Theme.VoiceFlow.Overlay">
             <intent-filter>
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />

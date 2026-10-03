@@ -22,12 +22,13 @@ object FillerWordRemover {
 
     /**
      * Hesitation sounds and their repeated-letter variants — always noise. Covers
-     * "um/umm/ummm", "uh/uhh", "uhm", "hm/hmm", "mm/mmm", "mhm", "er/erm/ermm".
-     * Word-boundaried + comma-absorbing; "mm"/"er" require the safe forms (>=2 m,
-     * exact "er") so single letters and real words aren't touched.
+     * "um/umm/ummm", "uh/uhh", "uhm", "hm/hmm", "mm/mmm", "mhm", "er/erm/ermm", and the
+     * Spanish "eh/ehh", "ehm", "emm". Word-boundaried + comma-absorbing; "mm"/"er"/"emm"
+     * require the safe forms (>=2 m, exact "er") so single letters and real words — like
+     * the "em" of "let 'em go" — aren't touched.
      */
     private val hesitation = Regex(
-        "(,\\s*)?\\b(um+|uh+|uhm+|hm+|mm+|mhm+|erm+|er)\\b(\\s*,)?",
+        "(,\\s*)?\\b(um+|uh+|uhm+|hm+|mm+|mhm+|erm+|er|eh+|ehm+|emm+)\\b(\\s*,)?",
         RegexOption.IGNORE_CASE,
     )
 

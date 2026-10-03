@@ -40,7 +40,7 @@ fun AccessibilityConsentDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Turn on auto-insert",
+                tr("Activa la inserción automática", "Turn on auto-insert"),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = cs.onSurface,
@@ -49,33 +49,38 @@ fun AccessibilityConsentDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         text = {
             Column {
                 Text(
-                    "OpenWispr uses Android's Accessibility service for one job: typing your dictated " +
-                        "and rewritten text into the field you're focused on.",
+                    tr("VoiceFlow usa el servicio de Accesibilidad de Android para dos cosas: mostrar la burbuja " +
+                        "cuando se abre el teclado y escribir tu texto dictado en el campo donde estás.",
+                        "VoiceFlow uses Android's Accessibility service for two things: showing the bubble " +
+                        "when the keyboard opens, and typing your dictated text into the field you're in."),
                     style = MaterialTheme.typography.bodyLarge,
                     color = cs.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(14.dp))
                 DisclosureBullet(
-                    "What it accesses",
-                    "The text field you're currently focused in, so it can place your text there.",
+                    tr("A qué accede", "What it accesses"),
+                    tr("Al campo de texto donde estás escribiendo y a si el teclado está abierto, para poner ahí tu texto.",
+                        "The text field you're focused in and whether the keyboard is open, so it can place your text there."),
                 )
                 Spacer(Modifier.height(10.dp))
                 DisclosureBullet(
-                    "How it's used",
-                    "Only to insert your text. Nothing is collected, stored, logged, or sent off your phone.",
+                    tr("Cómo se usa", "How it's used"),
+                    tr("Solo para insertar tu texto. No se recopila, guarda, registra ni envía nada fuera de tu teléfono.",
+                        "Only to insert your text. Nothing is collected, stored, logged, or sent off your phone."),
                 )
                 Spacer(Modifier.height(10.dp))
                 DisclosureBullet(
-                    "You stay in control",
-                    "Turn it off anytime in Android Settings → Accessibility, or skip it and paste manually.",
+                    tr("Tú tienes el control", "You stay in control"),
+                    tr("Desactívalo cuando quieras en Ajustes de Android → Accesibilidad, u omítelo y pega el texto a mano.",
+                        "Turn it off anytime in Android Settings → Accessibility, or skip it and paste manually."),
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("I understand, open settings") }
+            TextButton(onClick = onConfirm) { Text(tr("Entendido, abrir ajustes", "I understand, open settings")) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Not now") }
+            TextButton(onClick = onDismiss) { Text(tr("Ahora no", "Not now")) }
         },
     )
 }

@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.sp
 import com.voicerewriter.R
 
 /**
- * OpenWispr type system (handoff): Mulish for UI/wordmark, IBM Plex Mono for the
+ * VoiceFlow type system (handoff): Mulish for UI/wordmark, IBM Plex Mono for the
  * uppercase eyebrow labels. Bundled OFL TTFs in res/font, so it's self-contained.
  */
 
@@ -24,7 +24,7 @@ val PlexMono = FontFamily(
     Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
 )
 
-/** The "OpenWispr" wordmark: Mulish 600, tight tracking. */
+/** The "VoiceFlow" wordmark: Mulish 600, tight tracking. */
 val Wordmark = TextStyle(
     fontFamily = Mulish,
     fontWeight = FontWeight.SemiBold,
@@ -42,7 +42,7 @@ val MonoEyebrow = TextStyle(
 
 private val base = Typography()
 
-val OpenWisprTypography = Typography(
+val VoiceFlowTypography = Typography(
     displayLarge = base.displayLarge.copy(fontFamily = Mulish),
     displayMedium = base.displayMedium.copy(fontFamily = Mulish),
     displaySmall = base.displaySmall.copy(fontFamily = Mulish),

@@ -60,7 +60,7 @@ class ContactsImportActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val repo = VocabRepository(applicationContext)
         setContent {
-            com.voicerewriter.ui.OpenWisprTheme {
+            com.voicerewriter.ui.VoiceFlowTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     ImportScreen(repo)
                 }
@@ -92,24 +92,26 @@ class ContactsImportActivity : ComponentActivity() {
         }
 
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Import from contacts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(tr("Importar de contactos", "Import from contacts"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(
-                "Names are split into individual words so company/role labels don't get added " +
-                    "as one entry. Uncheck anything you don't want.",
+                tr("Los nombres se separan en palabras para que las etiquetas de empresa o puesto no se " +
+                    "agreguen como una sola entrada. Desmarca lo que no quieras.",
+                    "Names are split into individual words so company/role labels don't get added " +
+                    "as one entry. Uncheck anything you don't want."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             val list = candidates
             when {
-                denied -> Text("Contacts permission denied. Enable it in system settings to import.",
+                denied -> Text(tr("Se negó el permiso de contactos. Actívalo en los ajustes del sistema para importar.", "Contacts permission denied. Enable it in system settings to import."),
                     color = MaterialTheme.colorScheme.error)
-                list == null -> Text("Reading contacts…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                list.isEmpty() -> Text("No new names found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                list == null -> Text(tr("Leyendo contactos…", "Reading contacts…"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                list.isEmpty() -> Text(tr("No se encontraron nombres nuevos.", "No new names found."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else -> {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { list.forEach { checked[it.token] = true } }) { Text("Select all") }
-                        TextButton(onClick = { checked.clear() }) { Text("Clear") }
+                        TextButton(onClick = { list.forEach { checked[it.token] = true } }) { Text(tr("Seleccionar todo", "Select all")) }
+                        TextButton(onClick = { checked.clear() }) { Text(tr("Limpiar", "Clear")) }
                     }
                     Divider()
                     LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
@@ -147,12 +149,12 @@ class ContactsImportActivity : ComponentActivity() {
                                     }
                                 }
                                 repo.save(current)
-                                Toast.makeText(context, "Added $selectedCount to dictionary", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Se agregaron $selectedCount al diccionario", "Added $selectedCount to dictionary"), Toast.LENGTH_SHORT).show()
                                 setResult(Activity.RESULT_OK)
                                 finish()
                             }
                         },
-                    ) { Text("Add $selectedCount to dictionary") }
+                    ) { Text(tr("Agregar $selectedCount al diccionario", "Add $selectedCount to dictionary")) }
                 }
             }
         }

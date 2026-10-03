@@ -12,12 +12,12 @@ import com.voicerewriter.textproc.AppContext
 import com.voicerewriter.textproc.TextProcessor
 import com.voicerewriter.textproc.TextProcessingConfig
 import com.voicerewriter.textproc.VocabCorrector
-import com.voicerewriter.ui.BrandAmber
-import com.voicerewriter.ui.BrandCoral
-import com.voicerewriter.ui.BrandRose
-import com.voicerewriter.ui.MarkCream
-import com.voicerewriter.ui.OpenWisprTheme
-import com.voicerewriter.ui.SunsetBrush
+import com.voicerewriter.ui.FlowCyan
+import com.voicerewriter.ui.FlowBlue
+import com.voicerewriter.ui.FlowSky
+import com.voicerewriter.ui.FlowWhite
+import com.voicerewriter.ui.VoiceFlowTheme
+import com.voicerewriter.ui.FlowBrush
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -53,15 +53,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,9 +75,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -101,6 +95,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
+import com.voicerewriter.ui.FlowMint
+import com.voicerewriter.ui.FlowLight
+import com.voicerewriter.ui.FlowNavy
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
 
 class RewriteActivity : ComponentActivity() {
 
@@ -119,15 +125,6 @@ class RewriteActivity : ComponentActivity() {
         fun retryIntent(context: Context, id: String): Intent =
             Intent(context, RewriteActivity::class.java)
                 .putExtra(EXTRA_RETRY_ID, id)
-
-        /**
-         * How long the corrected text is shown before it auto-inserts — scaled to the
-         * text length so there's always time to read it. Min 2s, up to 6s.
-         */
-        private fun editWindowMs(text: String): Long {
-            val words = text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
-            return (2000L + words * 110L).coerceIn(2000L, 6000L)
-        }
     }
 
     private lateinit var repo: SettingsRepository
@@ -166,12 +163,12 @@ class RewriteActivity : ComponentActivity() {
         }
 
         setContent {
-            OpenWisprTheme {
+            VoiceFlowTheme {
                 when {
                     processTextMode ->
                         ChipRewriteSheet(
-                            title = "Rewrite",
-                            acceptLabel = if (readOnly) "Copy" else "Accept",
+                            title = tr("Reescribir", "Rewrite"),
+                            acceptLabel = if (readOnly) tr("Copiar", "Copy") else tr("Aceptar", "Accept"),
                             onAccept = ::accept,
                         )
                     else -> VoiceSheet()
@@ -242,6 +239,9 @@ class RewriteActivity : ComponentActivity() {
      * to mislabel entries as "System UI".
      */
     private var dictationHostPkg: String? = null
+
+    /** Packages the user assigned to a tone in "Tone by app" (package → category key). */
+    private var appToneAssignments: Map<String, String> = emptyMap()
 
     /** App context of the in-flight dictation, captured in [process] for corpus tagging. */
     private var dictationCategory: AppContext.Category = AppContext.Category.GENERIC
@@ -320,7 +320,7 @@ class RewriteActivity : ComponentActivity() {
     }
 
     private fun appLabel(pkg: String): String {
-        if (pkg.isBlank()) return "Dictation"
+        if (pkg.isBlank()) return tr("Dictado", "Dictation")
         return runCatching {
             val pm = packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
@@ -338,8 +338,8 @@ class RewriteActivity : ComponentActivity() {
         val channelId = "dictation_fix"
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val ch = android.app.NotificationChannel(
-                channelId, "Dictation corrections", android.app.NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = "Tap to fix a mis-heard name after dictation." }
+                channelId, tr("Correcciones de dictado", "Dictation corrections"), android.app.NotificationManager.IMPORTANCE_LOW,
+            ).apply { description = tr("Toca para corregir una palabra mal escuchada después de dictar.", "Tap to fix a mis-heard name after dictation.") }
             nm.createNotificationChannel(ch)
         }
         val pi = android.app.PendingIntent.getActivity(
@@ -347,9 +347,9 @@ class RewriteActivity : ComponentActivity() {
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notif = androidx.core.app.NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_aperture)
-            .setContentTitle("Dictated ✓")
-            .setContentText("Got a name wrong? Tap to fix.")
+            .setSmallIcon(R.drawable.ic_voiceflow)
+            .setContentTitle(tr("Dictado ✓", "Dictated ✓"))
+            .setContentText(tr("¿Alguna palabra salió mal? Toca para enseñársela al diccionario.", "Got a word wrong? Tap to teach it to your dictionary."))
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pi)
             .setOnlyAlertOnce(true)
@@ -363,19 +363,6 @@ class RewriteActivity : ComponentActivity() {
         cb.setPrimaryClip(ClipData.newPlainText("rewrite", text))
     }
 
-    /**
-     * Teach the dictionary from an inline edit (wrong→right for the words the user
-     * fixed). Fire-and-forget on a worker thread so it survives this activity
-     * finishing right after insert.
-     */
-    private fun learnFromEditAsync(original: String, edited: String) {
-        if (original == edited) return
-        val ctx = applicationContext
-        Thread {
-            runCatching { kotlinx.coroutines.runBlocking { VocabRepository(ctx).learnFromEdit(original, edited) } }
-        }.start()
-    }
-
     private fun streamFor(s: Settings, prompt: String, text: String): kotlinx.coroutines.flow.Flow<String> =
         if (s.provider == "local") LocalLlmEngine.streamWithPrompt(applicationContext, s, prompt, text)
         else RewriteEngine.streamWithPrompt(s, prompt, text)
@@ -387,11 +374,11 @@ class RewriteActivity : ComponentActivity() {
         return when {
             e is java.net.UnknownHostException || e is java.net.ConnectException ||
                 "unable to resolve host" in low || "failed to connect" in low ->
-                "No connection. Check your network, or switch to on-device in Settings."
+                tr("Sin conexión. Revisa tu red o cambia a \"en el dispositivo\" en Ajustes.", "No connection. Check your network, or switch to on-device in Settings.")
             e is java.net.SocketTimeoutException || "timeout" in low || "timed out" in low ->
-                "That took too long. Try again."
+                tr("Tardó demasiado. Inténtalo de nuevo.", "That took too long. Try again.")
             "401" in low || "403" in low || "unauthor" in low || "api key" in low || "invalid key" in low ->
-                "Check your API key in Settings."
+                tr("Revisa tu clave de API en Ajustes.", "Check your API key in Settings.")
             else -> msg
         }
     }
@@ -416,9 +403,16 @@ class RewriteActivity : ComponentActivity() {
             ?.let { it.id to "Whisper" }
     }
 
-    // ---------------- voice dictation sheet ----------------
+    // ---------------- voice dictation (no review sheet) ----------------
 
-    private enum class Stage { IDLE, WAITING_MODEL, RECORDING, TRANSCRIBING, CORRECTING, REVIEW, ERROR }
+    /**
+     * Dictation runs without a review step: once the text is transcribed and cleaned up it goes
+     * straight into the field. The only UI is a small status pill (listening / transcribing),
+     * plus an error card when something fails, so nothing covers the app being typed into.
+     * Corrections happen afterwards, by teaching the personal dictionary — never by editing
+     * the transcript in between.
+     */
+    private enum class Stage { IDLE, WAITING_MODEL, RECORDING, TRANSCRIBING, CORRECTING, ERROR }
 
     @Composable
     private fun VoiceSheet() {
@@ -428,40 +422,44 @@ class RewriteActivity : ComponentActivity() {
 
         var settings by remember { mutableStateOf<Settings?>(null) }
         var stage by remember { mutableStateOf(Stage.IDLE) }
-        var transcript by remember { mutableStateOf("") }   // raw STT (shown immediately)
+        var transcript by remember { mutableStateOf("") }   // raw STT
         var output by remember { mutableStateOf("") }       // LLM streaming buffer
-        var finalText by remember { mutableStateOf("") }    // corrected text to insert
         var error by remember { mutableStateOf<String?>(null) }
-        var notice by remember { mutableStateOf<String?>(null) }  // soft, non-blocking note in REVIEW
         var streamJob by remember { mutableStateOf<Job?>(null) }
         var ampJob by remember { mutableStateOf<Job?>(null) }
         var pendingStart by remember { mutableStateOf(false) }
-        var editing by remember { mutableStateOf(false) }
-        var editText by remember { mutableStateOf("") }
-        var countdown by remember { mutableStateOf(1f) }
         var recStartMs by remember { mutableStateOf(0L) }
         var durationSec by remember { mutableStateOf(0) }
         val amps = remember { mutableStateListOf<Float>() }
-        val editFocus = remember { FocusRequester() }
 
         val micPermission = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { granted ->
             if (granted) pendingStart = true
-            else { error = "Microphone permission denied."; stage = Stage.ERROR }
+            else { error = tr("Se negó el permiso del micrófono.", "Microphone permission denied."); stage = Stage.ERROR }
         }
 
-        fun toReview(text: String) {
-            // A blank result (e.g. cleanup or polish ate everything) should not leave an empty sheet.
-            if (text.isBlank()) { error = "Nothing to insert. Try again."; stage = Stage.ERROR; return }
-            finalText = text; editText = text; countdown = 1f; editing = false; stage = Stage.REVIEW
+        /** Final step: the text goes straight into the field (or the clipboard as a fallback). */
+        fun deliver(text: String) {
+            // A blank result (e.g. cleanup ate everything) must not insert nothing silently.
+            if (text.isBlank()) {
+                error = tr("No se detectó texto para insertar. Inténtalo de nuevo.", "Nothing to insert. Try again.")
+                stage = Stage.ERROR
+                return
+            }
+            runCatching { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+            recordHistory(transcript, text, durationSec, edited = false,
+                onDevice = settings?.sttProvider == "local")
+            recordCorpus(text, text, edited = false)
+            acceptVoice(text)
         }
 
         fun process(s: Settings, spoken: String) {
-            transcript = spoken; output = ""; error = null; notice = null
+            transcript = spoken; output = ""; error = null
             val host = dictationHostPkg ?: OpenWisprAccessibilityService.lastHostPackage
             // App-context up front: drives code handling, the chat-period rule, and polish tone.
-            val category = AppContext.categoryFor(host, spoken)
+            // Apps the user assigned to a tone in "Tone by app" win over the built-in guess.
+            val category = AppContext.categoryFor(host, spoken, appToneAssignments)
             dictationCategory = category
             val isCode = category == AppContext.Category.CODE
             val cleaned0 = if (s.deterministicCleanup)
@@ -480,7 +478,7 @@ class RewriteActivity : ComponentActivity() {
             val deterministicStructure = cleaned.contains('\n')
             if (!s.llmPolishEnabled || wordCount < 4 || (isCode && s.polishLevel != PolishLevel.FULL) ||
                 deterministicStructure) {
-                toReview(cleaned); return
+                deliver(cleaned); return
             }
             stage = Stage.CORRECTING
             val relaxed = RewriteEngine.hasSelfCorrection(spoken)
@@ -502,20 +500,16 @@ class RewriteActivity : ComponentActivity() {
                 collectInto(
                     streamFor(s, prompt, cleaned),
                     { output += it },
-                    { _ ->
-                        // The polish is optional — never throw away a good transcript on its failure.
-                        notice = "Couldn't polish. Using the cleaned text."
-                        toReview(cleaned)
-                    },
+                    // The polish is optional — never throw away a good transcript on its failure.
+                    { _ -> deliver(cleaned) },
                     {
                         // Content-preservation guard: if the model dropped too much or ballooned
                         // with invented content, fall back to the deterministic text.
                         val polished = RewriteEngine.cleanOutput(output)
                         if (polished.isBlank() || !RewriteEngine.preservesContent(cleaned, polished, relaxed)) {
-                            notice = "Polish changed too much. Using the cleaned text."
-                            toReview(cleaned)
+                            deliver(cleaned)
                         } else {
-                            toReview(dropChatTerminalPeriod(polished, category))
+                            deliver(dropChatTerminalPeriod(polished, category))
                         }
                     },
                 )
@@ -528,10 +522,11 @@ class RewriteActivity : ComponentActivity() {
          * [recId] names the durable copy; the cloud backend uploads that exact file.
          */
         fun runTranscription(s: Settings, samples: ShortArray, recId: String?) {
-            error = null; notice = null; output = ""; finalText = ""
+            error = null; output = ""
             recId?.let { PendingAudio.claim(it) }
             pendingId = recId
             stage = Stage.TRANSCRIBING
+            BubbleService.instance?.showProcessing()
             streamJob = scope.launch {
                 try {
                     val vocab = VocabRepository(this@RewriteActivity).get()
@@ -544,8 +539,10 @@ class RewriteActivity : ComponentActivity() {
                         SttEngine.transcribe(s, PendingAudio.wavFile(this@RewriteActivity, recId!!), bias)
                     }
                     val text = if (vocab.isEmpty()) raw else VocabCorrector.correct(raw, vocab)
-                    if (text.isBlank()) { error = "Empty transcript. Try again."; stage = Stage.ERROR }
-                    else process(s, text)
+                    if (text.isBlank()) {
+                        error = tr("No se escuchó nada. Inténtalo de nuevo.", "Empty transcript. Try again.")
+                        stage = Stage.ERROR
+                    } else process(s, text)
                 } catch (e: Exception) {
                     // Deliberately does not touch the saved recording. This is exactly the
                     // failure the write-ahead copy exists for; deleting it here is what used
@@ -560,7 +557,7 @@ class RewriteActivity : ComponentActivity() {
             val id = pendingId ?: return
             val samples = PendingAudio.samples(this@RewriteActivity, id)
             if (samples == null) {
-                error = "That recording is no longer on this device."
+                error = tr("Esa grabación ya no está en este dispositivo.", "That recording is no longer on this device.")
                 stage = Stage.ERROR
                 return
             }
@@ -572,10 +569,9 @@ class RewriteActivity : ComponentActivity() {
             durationSec = ((System.currentTimeMillis() - recStartMs) / 1000L).toInt().coerceAtLeast(1)
             BubbleService.recordingStopper = null
             ampJob?.cancel()
-            BubbleService.instance?.showIdle()
             val samples = audioRecorder.stop()
             if (samples == null) {
-                error = "Didn't catch any audio. Tap and speak a little longer."
+                error = tr("No se captó audio. Toca y habla un poco más.", "Didn't catch any audio. Tap and speak a little longer.")
                 stage = Stage.ERROR
                 return
             }
@@ -591,7 +587,8 @@ class RewriteActivity : ComponentActivity() {
             if (rec == null && s.sttProvider != "local") {
                 // The cloud upload needs a file and we just failed to write one — say so
                 // rather than proceeding as if a recoverable copy existed.
-                error = "Couldn't save the recording. Free up some storage and try again."
+                error = tr("No se pudo guardar la grabación. Libera espacio e inténtalo de nuevo.",
+                    "Couldn't save the recording. Free up some storage and try again.")
                 stage = Stage.ERROR
                 return
             }
@@ -599,18 +596,18 @@ class RewriteActivity : ComponentActivity() {
         }
 
         fun startRecording(s: Settings) {
-            error = null; notice = null; transcript = ""; output = ""; finalText = ""; amps.clear()
+            error = null; transcript = ""; output = ""; amps.clear()
             // "Keep history" off promises nothing is saved to disk. Clear anything a previous
             // session left behind (e.g. a crash mid-dictation) before this one writes its own.
             if (!DictationHistory.keepHistory(this@RewriteActivity)) {
                 val ctx = applicationContext
                 Thread { runCatching { PendingAudio.purgeAll(ctx) } }.start()
             }
-            // A previous take in this sheet (they hit "Record again") is no longer live. It
-            // keeps its audio and stays retryable from Home; this take gets its own row.
+            // A previous take (they hit "Record again") is no longer live. It keeps its audio
+            // and stays retryable from Home; this take gets its own row.
             pendingId?.let { PendingAudio.release(it) }
             pendingId = null
-            // Snapshot the target app now, while it still has focus, before our sheet or any
+            // Snapshot the target app now, while it still has focus, before our window or any
             // system window can steal it (otherwise the entry gets mislabelled, e.g. "System UI").
             dictationHostPkg = OpenWisprAccessibilityService.lastHostPackage
             recStartMs = System.currentTimeMillis()
@@ -619,7 +616,11 @@ class RewriteActivity : ComponentActivity() {
             // still visibly holding the button down.
             val useVad = s.vadAutoStop && !pushToTalk
             try { audioRecorder.start(vadAutoStop = useVad, onAutoStop = { stopRecording(s) }) }
-            catch (e: Exception) { error = e.message ?: "Couldn't start the mic."; stage = Stage.ERROR; return }
+            catch (e: Exception) {
+                error = e.message ?: tr("No se pudo iniciar el micrófono.", "Couldn't start the mic.")
+                stage = Stage.ERROR
+                return
+            }
             stage = Stage.RECORDING
             BubbleService.instance?.showRecording()
             BubbleService.recordingStopper = { stopRecording(s) }
@@ -666,13 +667,15 @@ class RewriteActivity : ComponentActivity() {
                                 return@launch
                             }
                         }
-                        error = "On-device model not downloaded. Open Settings → Voice → Download model."
+                        error = tr("El modelo de voz no está descargado. Abre Ajustes → Voz → Descargar modelo.",
+                            "On-device model not downloaded. Open Settings → Voice → Download model.")
                         stage = Stage.ERROR
                     }
                     return
                 }
             } else if (!s.isSttConfigured) {
-                error = "No speech-to-text key set. Open OpenWispr settings."
+                error = tr("No hay clave de voz a texto. Abre los ajustes de VoiceFlow.",
+                    "No speech-to-text key set. Open VoiceFlow settings.")
                 stage = Stage.ERROR
                 return
             }
@@ -683,15 +686,14 @@ class RewriteActivity : ComponentActivity() {
             val s = settings ?: return
             when (stage) {
                 Stage.RECORDING -> stopRecording(s)
-                Stage.IDLE, Stage.REVIEW, Stage.ERROR -> ensurePermissionThenRecord(s)
+                Stage.IDLE, Stage.ERROR -> ensurePermissionThenRecord(s)
                 else -> {}
             }
         }
 
         /**
-         * [discardAudio] separates the two ways out of this sheet. "Discard" is the user
-         * throwing the dictation away — a terminal outcome, so the recording goes with it.
-         * Backing out of an error is not: that audio stays on disk, retryable from Home.
+         * Leave without inserting. The recording, if any, stays on disk — retryable from Home —
+         * unless [discardAudio] says the user threw this dictation away.
          */
         fun cancelAndFinish(discardAudio: Boolean = false) {
             streamJob?.cancel(); ampJob?.cancel()
@@ -710,13 +712,17 @@ class RewriteActivity : ComponentActivity() {
 
         LaunchedEffect(Unit) {
             val s = repo.get(); settings = s
+            appToneAssignments = withContext(Dispatchers.IO) {
+                AppToneRepository(this@RewriteActivity).appAssignments()
+            }
             val retry = retryId
             if (retry != null) {
                 // Opened from Home to re-run a recording an earlier attempt never finished.
                 val rec = withContext(Dispatchers.IO) { PendingAudio.get(this@RewriteActivity, retry) }
                 val saved = withContext(Dispatchers.IO) { PendingAudio.samples(this@RewriteActivity, retry) }
                 if (rec == null || saved == null) {
-                    error = "That recording is no longer on this device."; stage = Stage.ERROR
+                    error = tr("Esa grabación ya no está en este dispositivo.", "That recording is no longer on this device.")
+                    stage = Stage.ERROR
                 } else {
                     durationSec = rec.durationSec
                     dictationHostPkg = rec.appPackage.ifBlank { null }
@@ -727,27 +733,10 @@ class RewriteActivity : ComponentActivity() {
         LaunchedEffect(pendingStart) {
             if (pendingStart) { pendingStart = false; settings?.let { startRecording(it) } }
         }
-        // Auto-insert after the edit window unless the user is editing.
-        LaunchedEffect(stage, editing) {
-            if (stage == Stage.REVIEW && !editing && finalText.isNotBlank()) {
-                val total = editWindowMs(finalText)
-                var e = 0L; val step = 16L
-                while (e < total && isActive) {
-                    countdown = 1f - e.toFloat() / total
-                    delay(step); e += step
-                }
-                if (isActive && stage == Stage.REVIEW && !editing) {
-                    recordHistory(transcript, finalText, durationSec, edited = false,
-                        onDevice = settings?.sttProvider == "local")
-                    recordCorpus(finalText, finalText, edited = false)
-                    acceptVoice(finalText)
-                }
-            }
-        }
-        LaunchedEffect(editing) { if (editing) runCatching { editFocus.requestFocus() } }
-        // Gentle cue when the result is ready to review (before it auto-inserts).
+        // The bubble mirrors the stage: back to its resting look whenever nothing is in flight.
         LaunchedEffect(stage) {
-            if (stage == Stage.REVIEW) runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+            if (stage == Stage.ERROR || stage == Stage.IDLE) BubbleService.instance?.showIdle()
+            if (stage == Stage.ERROR) runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
         }
         DisposableEffect(Unit) {
             onDispose {
@@ -757,176 +746,239 @@ class RewriteActivity : ComponentActivity() {
             }
         }
 
-        BottomSheet(onScrimTap = { if (stage == Stage.RECORDING) onMicTap() else cancelAndFinish() }) {
-            SheetHeader(
+        Box(Modifier.fillMaxSize()) {
+            // Tapping outside: stops a recording, closes an error. While the text is being
+            // transcribed it does nothing — this window is invisible there, and a tap meant for
+            // the app underneath must not throw the dictation away.
+            Spacer(Modifier.fillMaxSize().clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {
                 when (stage) {
-                    Stage.WAITING_MODEL -> "Finishing setup"
-                    Stage.RECORDING -> "Listening"
-                    Stage.TRANSCRIBING -> "Transcribing"
-                    Stage.CORRECTING -> "Polishing"
-                    Stage.REVIEW -> "Ready"
-                    else -> "OpenWispr"
+                    Stage.RECORDING -> onMicTap()
+                    Stage.TRANSCRIBING, Stage.CORRECTING -> {}
+                    else -> cancelAndFinish()
                 }
-            )
-
-            when (stage) {
-                Stage.WAITING_MODEL -> {
-                    val showPct = settings?.sttModel?.let { OnDeviceStt.isParakeet(it) } == true
-                    TranscribingRing("Finishing setup")
-                    Text(
-                        if (showPct) "Your speech model is still downloading (${(parakeetDlPct * 100).toInt()}%). I'll start listening the moment it's ready."
-                        else "Your speech model is still downloading. I'll start listening the moment it's ready.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (showPct) {
-                        Spacer(Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = { parakeetDlPct.coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
+            })
+            Box(
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter)
+                    .navigationBarsPadding().padding(horizontal = 16.dp, vertical = 20.dp),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                AnimatedContent(
+                    targetState = if (stage == Stage.ERROR || stage == Stage.IDLE) "error" else "pill",
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 3 })
+                            .togetherWith(fadeOut(tween(160)))
+                    },
+                    label = "voice-ui",
+                ) { kind ->
+                    if (kind == "pill") {
+                        StatusPill(
+                            stage = stage,
+                            amps = amps,
+                            title = when (stage) {
+                                Stage.WAITING_MODEL -> tr("Terminando de preparar", "Finishing setup")
+                                Stage.RECORDING -> tr("Escuchando…", "Listening…")
+                                Stage.TRANSCRIBING -> tr("Transcribiendo…", "Transcribing…")
+                                Stage.CORRECTING -> tr("Puliendo el texto…", "Polishing…")
+                                else -> ""
+                            },
+                            subtitle = when (stage) {
+                                Stage.WAITING_MODEL -> {
+                                    val showPct = settings?.sttModel?.let { OnDeviceStt.isParakeet(it) } == true
+                                    if (showPct) tr("Descargando el modelo de voz (${(parakeetDlPct * 100).toInt()}%)",
+                                        "Downloading the speech model (${(parakeetDlPct * 100).toInt()}%)")
+                                    else tr("Descargando el modelo de voz", "Downloading the speech model")
+                                }
+                                // Only promise an auto-stop when one can actually happen.
+                                Stage.RECORDING -> when {
+                                    pushToTalk -> tr("Suelta para enviar", "Release to send")
+                                    audioRecorder.vadActive -> tr("Me detengo cuando hagas una pausa", "I'll stop when you pause")
+                                    else -> tr("Toca la burbuja al terminar", "Tap the bubble when you're done")
+                                }
+                                else -> tr("Se insertará en automático", "It'll be inserted automatically")
+                            },
+                            onCancel = if (stage == Stage.RECORDING || stage == Stage.WAITING_MODEL) {
+                                { cancelAndFinish(discardAudio = true) }
+                            } else null,
+                            onDone = if (stage == Stage.RECORDING) { { onMicTap() } } else null,
                         )
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { cancelAndFinish() }) { Text("Cancel") }
-                    }
-                }
-
-                Stage.RECORDING -> {
-                    ListeningOrb(amps, Modifier.fillMaxWidth().height(132.dp))
-                    // Only promise an auto-stop when one can actually happen. The old copy said
-                    // "I'll stop when you pause" unconditionally, including when auto-stop was
-                    // switched off or the VAD model had failed to load, so the recording just
-                    // ran on and looked broken.
-                    Text(
-                        when {
-                            pushToTalk -> "Keep holding and speak. Release to send."
-                            audioRecorder.vadActive -> "Speak now. I'll stop when you pause."
-                            else -> "Speak now. Tap Done when you're finished."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { cancelAndFinish() }) { Text("Cancel") }
-                        TextButton(onClick = { onMicTap() }) {
-                            Icon(Icons.Default.Check, null, Modifier.size(18.dp)); Text("  Done")
-                        }
-                    }
-                }
-
-                Stage.TRANSCRIBING -> TranscribingRing("Transcribing")
-
-                Stage.CORRECTING -> {
-                    TranscribingRing("Polishing")
-                    if (output.isNotBlank()) {
-                        OutputText(RewriteEngine.cleanOutput(output))
-                    }
-                }
-
-                Stage.REVIEW -> {
-                    if (editing) {
-                        OutlinedTextField(
-                            value = editText,
-                            onValueChange = { editText = it },
-                            modifier = Modifier.fillMaxWidth().focusRequester(editFocus),
-                        )
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = {
-                                runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
-                                cancelAndFinish(discardAudio = true)
-                            }) {
-                                Icon(Icons.Default.Close, null, Modifier.size(18.dp)); Text("  Discard")
-                            }
-                            TextButton(onClick = {
-                                runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
-                                learnFromEditAsync(finalText, editText)
-                                recordHistory(transcript, editText, durationSec, edited = true,
-                                    onDevice = settings?.sttProvider == "local")
-                                recordCorpus(finalText, editText, edited = true)
-                                acceptVoice(editText)
-                            }) {
-                                Icon(Icons.Default.Check, null, Modifier.size(18.dp)); Text("  Insert")
-                            }
-                        }
                     } else {
-                        notice?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        OutputText(finalText)
-                        LinearProgressIndicator(
-                            progress = { countdown },
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)),
+                        // The recording outlived the failure, so offer to re-run it before asking
+                        // the user to say the whole thing again. Re-running the *same* on-device
+                        // engine on the *same* samples fails identically, so a retry prefers the
+                        // other downloaded engine when there is one.
+                        val saved = pendingId
+                        val alt = if (saved != null) settings?.let { altOnDeviceEngine(it) } else null
+                        ErrorCard(
+                            message = error ?: tr("Algo salió mal.", "Something went wrong."),
+                            detail = when {
+                                saved == null -> null
+                                alt != null -> tr("Tu grabación está guardada en este dispositivo; no se perdió nada. Reintentar la procesa con ${alt.second}.",
+                                    "Your recording is saved on this device. Nothing was lost. Retry runs it again on ${alt.second}.")
+                                else -> tr("Tu grabación está guardada en este dispositivo; no se perdió nada.",
+                                    "Your recording is saved on this device. Nothing was lost.")
+                            },
+                            onRetry = if (saved != null) {
+                                { settings?.let { s -> retryTranscription(if (alt != null) s.copy(sttModel = alt.first) else s) } }
+                            } else null,
+                            recordLabel = if (saved != null) tr("Grabar de nuevo", "Record again") else tr("Intentar de nuevo", "Try again"),
+                            onRecord = { onMicTap() },
+                            onClose = { cancelAndFinish() },
                         )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TextButton(onClick = {
-                                runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
-                                editing = true
-                            }) {
-                                Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Text("  Edit")
-                            }
-                            Row {
-                                TextButton(onClick = {
-                                    runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
-                                    cancelAndFinish(discardAudio = true)
-                                }) { Text("Discard") }
-                                TextButton(onClick = {
-                                    runCatching { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
-                                    recordHistory(transcript, finalText, durationSec, edited = false,
-                                        onDevice = settings?.sttProvider == "local")
-                                    recordCorpus(finalText, finalText, edited = false)
-                                    acceptVoice(finalText)
-                                }) {
-                                    Icon(Icons.Default.Check, null, Modifier.size(18.dp)); Text("  Insert")
-                                }
-                            }
-                        }
                     }
                 }
+            }
+        }
+    }
 
-                Stage.IDLE, Stage.ERROR -> {
-                    if (error != null) {
-                        Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+    /** The compact, dark status pill shown while listening and while the text is processed. */
+    @Composable
+    private fun StatusPill(
+        stage: Stage,
+        amps: List<Float>,
+        title: String,
+        subtitle: String,
+        onCancel: (() -> Unit)?,
+        onDone: (() -> Unit)?,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(30.dp),
+            color = FlowNavy.copy(alpha = 0.94f),
+            shadowElevation = 12.dp,
+            modifier = Modifier.widthIn(max = 460.dp),
+        ) {
+            Row(
+                Modifier.padding(start = 10.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                StatusGlyph(listening = stage == Stage.RECORDING, amps = amps, modifier = Modifier.size(44.dp))
+                Column(Modifier.weight(1f, fill = false).widthIn(min = 120.dp)) {
+                    Text(title, color = FlowWhite, style = MaterialTheme.typography.titleSmall)
+                    Text(subtitle, color = FlowLight.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall)
+                }
+                if (onCancel != null) {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Default.Close, tr("Cancelar", "Cancel"), tint = FlowLight.copy(alpha = 0.8f))
                     }
-                    // The recording outlived the failure, so offer to re-run it before asking
-                    // the user to say the whole thing again. Two choices only — re-run the
-                    // audio we still have, or start over. Back dismisses; the recording stays
-                    // on disk either way and is retryable from Home.
-                    val saved = pendingId
-                    // Re-running the *same* on-device engine on the *same* samples is
-                    // deterministic — it fails identically. So a retry prefers the other
-                    // downloaded engine, which is the only thing that can actually rescue the
-                    // take. Falls back to the current engine (cloud, or only one model), where
-                    // a retry does mean something because the failure was transient.
-                    val alt = if (saved != null) settings?.let { altOnDeviceEngine(it) } else null
-                    if (saved != null) {
-                        Text(
-                            if (alt != null)
-                                "Your recording is saved on this device. Nothing was lost. " +
-                                    "Retry runs it again on ${alt.second}."
-                            else "Your recording is saved on this device. Nothing was lost.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                }
+                if (onDone != null) {
+                    Box(
+                        Modifier.size(40.dp).clip(CircleShape).background(FlowBrush).clickable(onClick = onDone),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Default.Check, tr("Listo", "Done"), tint = FlowWhite, modifier = Modifier.size(22.dp))
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        if (saved != null) {
-                            TextButton(onClick = {
-                                settings?.let { s ->
-                                    retryTranscription(if (alt != null) s.copy(sttModel = alt.first) else s)
-                                }
-                            }) {
-                                Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Text("  Retry")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ErrorCard(
+        message: String,
+        detail: String?,
+        onRetry: (() -> Unit)?,
+        recordLabel: String,
+        onRecord: () -> Unit,
+        onClose: () -> Unit,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 12.dp,
+            modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp),
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(FlowBrush))
+                    Text("VOICEFLOW", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                if (detail != null) {
+                    Text(detail, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onClose) { Text(tr("Cerrar", "Close")) }
+                    if (onRetry != null) {
+                        TextButton(onClick = onRetry) {
+                            Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Text("  " + tr("Reintentar", "Retry"))
+                        }
+                    }
+                    TextButton(onClick = onRecord) {
+                        Icon(Icons.Default.Mic, null, Modifier.size(18.dp)); Text("  $recordLabel")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The pill's icon, matching the bubble: a gradient microphone with rippling rings while
+     * listening, a navy disc with a rotating arc and moving waveform while processing.
+     */
+    @Composable
+    private fun StatusGlyph(listening: Boolean, amps: List<Float>, modifier: Modifier = Modifier) {
+        val t = rememberInfiniteTransition(label = "glyph")
+        val phase by t.animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing)),
+            label = "phase",
+        )
+        val level = amps.takeLast(6).maxOrNull() ?: 0f
+        val mic = painterResource(R.drawable.ic_voiceflow)
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Crossfade(targetState = listening, animationSpec = tween(240), label = "glyph-state") { isListening ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val c = Offset(size.width / 2f, size.height / 2f)
+                        val half = size.minDimension / 2f
+                        val r = half * 0.74f
+                        if (isListening) {
+                            for (k in 0..1) {
+                                val p = (phase + k * 0.5f) % 1f
+                                drawCircle(
+                                    color = FlowCyan.copy(alpha = (1f - p) * 0.55f),
+                                    radius = r + (half - r) * p,
+                                    center = c,
+                                    style = Stroke(width = 2.dp.toPx()),
+                                )
+                            }
+                            drawCircle(brush = FlowBrush, radius = r * (1f + level * 0.08f), center = c)
+                        } else {
+                            drawCircle(color = Color(0xFF12263A), radius = r, center = c)
+                            val w = 2.5.dp.toPx()
+                            rotate(phase * 720f) {
+                                drawArc(
+                                    brush = Brush.sweepGradient(listOf(FlowCyan.copy(alpha = 0f), FlowCyan, FlowBlue)),
+                                    startAngle = 0f, sweepAngle = 270f, useCenter = false,
+                                    topLeft = Offset(c.x - r + w, c.y - r + w),
+                                    size = Size((r - w) * 2f, (r - w) * 2f),
+                                    style = Stroke(width = w, cap = StrokeCap.Round),
+                                )
+                            }
+                            val bars = floatArrayOf(0.45f, 0.75f, 1f, 0.75f, 0.45f)
+                            val barW = r * 0.13f
+                            val gap = r * 0.09f
+                            var x = c.x - (bars.size * barW + (bars.size - 1) * gap) / 2f + barW / 2f
+                            bars.forEachIndexed { i, base ->
+                                val wave = 0.55f + 0.45f * kotlin.math.sin(phase * 2f * Math.PI.toFloat() * 2f + i * 0.9f)
+                                val h = r * 0.9f * base * wave
+                                drawLine(
+                                    color = if (i == 2) FlowMint else FlowCyan,
+                                    start = Offset(x, c.y - h / 2f), end = Offset(x, c.y + h / 2f),
+                                    strokeWidth = barW, cap = StrokeCap.Round,
+                                )
+                                x += barW + gap
                             }
                         }
-                        TextButton(onClick = { onMicTap() }) {
-                            Icon(Icons.Default.Mic, null, Modifier.size(18.dp))
-                            Text(if (saved != null) "  Record again" else "  Try again")
-                        }
+                    }
+                    if (isListening) {
+                        Icon(mic, null, tint = FlowWhite, modifier = Modifier.fillMaxSize(0.42f))
                     }
                 }
             }
@@ -971,13 +1023,13 @@ class RewriteActivity : ComponentActivity() {
                 }
                 if (!llmReady(settings)) {
                     error = if (settings.provider == "local")
-                        "On-device model not downloaded. Open OpenWispr → Save settings."
-                    else "No API key set. Open OpenWispr to configure it."
+                        tr("El modelo en el dispositivo no está descargado. Ábrelo en VoiceFlow → Ajustes.", "On-device model not downloaded. Open VoiceFlow → Settings.")
+                    else tr("No hay clave de API. Abre VoiceFlow para configurarla.", "No API key set. Open VoiceFlow to configure it.")
                     streaming = false
                     return@launch
                 }
                 if (sourceState.value.isBlank()) {
-                    error = "Nothing to transform. Copy some text first."
+                    error = tr("No hay texto que transformar. Copia algún texto primero.", "Nothing to transform. Copy some text first.")
                     streaming = false
                     return@launch
                 }
@@ -1000,12 +1052,12 @@ class RewriteActivity : ComponentActivity() {
             when {
                 error != null -> Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 selectedAction == null -> Text(
-                    sourceState.value.ifEmpty { "Reading clipboard…" },
+                    sourceState.value.ifEmpty { tr("Leyendo el portapapeles…", "Reading clipboard…") },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                 )
-                streaming && output.isBlank() -> TranscribingRing("Working")
+                streaming && output.isBlank() -> TranscribingRing(tr("Trabajando", "Working"))
                 else -> OutputText(RewriteEngine.cleanOutput(output).ifEmpty { "…" })
             }
 
@@ -1013,11 +1065,11 @@ class RewriteActivity : ComponentActivity() {
                 if (streaming) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 if (selectedAction != null && !streaming && error == null) {
                     TextButton(onClick = { run(selectedAction!!) }) {
-                        Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Text("  Redo")
+                        Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Text("  " + tr("Rehacer", "Redo"))
                     }
                 }
                 TextButton(onClick = { streamJob?.cancel(); setResult(Activity.RESULT_CANCELED); finish() }) {
-                    Icon(Icons.Default.Close, null, Modifier.size(18.dp)); Text("  Discard")
+                    Icon(Icons.Default.Close, null, Modifier.size(18.dp)); Text("  " + tr("Descartar", "Discard"))
                 }
                 TextButton(enabled = done && output.isNotBlank(), onClick = { onAccept(output) }) {
                     Icon(Icons.Default.Check, null, Modifier.size(18.dp)); Text("  $acceptLabel")
@@ -1053,7 +1105,7 @@ class RewriteActivity : ComponentActivity() {
     private fun SheetHeader(title: String) {
         // Mono uppercase "eyebrow" caption (handoff label spec).
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(SunsetBrush))
+            Box(Modifier.size(10.dp).clip(CircleShape).background(FlowBrush))
             Text(
                 title.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
@@ -1083,7 +1135,7 @@ class RewriteActivity : ComponentActivity() {
         }
     }
 
-    /** Transcribing/Polishing: a rotating sunset ring around the cream Aperture mark. */
+    /** Working: a rotating cyan ring around the VoiceFlow microphone. */
     @Composable
     private fun TranscribingRing(label: String) {
         val t = rememberInfiniteTransition(label = "ring")
@@ -1099,7 +1151,7 @@ class RewriteActivity : ComponentActivity() {
                         val w = 4.dp.toPx()
                         drawArc(
                             brush = Brush.sweepGradient(
-                                listOf(BrandAmber.copy(alpha = 0f), BrandAmber, BrandCoral, BrandRose),
+                                listOf(FlowCyan.copy(alpha = 0f), FlowCyan, FlowBlue, FlowSky),
                             ),
                             startAngle = 0f,
                             sweepAngle = 300f,
@@ -1111,7 +1163,7 @@ class RewriteActivity : ComponentActivity() {
                     }
                 }
                 Icon(
-                    painter = painterResource(R.drawable.ic_aperture),
+                    painter = painterResource(R.drawable.ic_voiceflow),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
@@ -1122,58 +1174,6 @@ class RewriteActivity : ComponentActivity() {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
-
-    /** Listening: a sunset-gradient disc with live equalizer bars and outward ripple rings. */
-    @Composable
-    private fun ListeningOrb(amps: List<Float>, modifier: Modifier = Modifier) {
-        val t = rememberInfiniteTransition(label = "orb")
-        val ripple by t.animateFloat(
-            initialValue = 0f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1800, easing = LinearEasing)),
-            label = "ripple",
-        )
-        val level = amps.takeLast(8).maxOrNull() ?: 0f
-        Box(modifier, contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val baseR = size.minDimension * 0.30f
-
-                // Outward ripples — "the breath becomes a sound."
-                for (k in 0..1) {
-                    val p = (ripple + k * 0.5f) % 1f
-                    val r = baseR * (1f + p * 1.7f)
-                    drawCircle(
-                        color = BrandCoral.copy(alpha = (1f - p) * 0.35f),
-                        radius = r,
-                        center = center,
-                        style = Stroke(width = 2.dp.toPx()),
-                    )
-                }
-
-                // Gradient disc, gently breathing with the live level.
-                val discR = baseR * (1f + level * 0.12f)
-                drawCircle(brush = SunsetBrush, radius = discR, center = center)
-
-                // Cream equalizer bars over the disc.
-                val bars = amps.takeLast(9)
-                if (bars.isNotEmpty()) {
-                    val span = discR * 1.25f
-                    val slot = (span * 2f) / bars.size
-                    val barW = (slot * 0.5f).coerceAtLeast(2f)
-                    bars.forEachIndexed { i, a ->
-                        val h = (a * discR * 1.6f).coerceIn(barW, discR * 1.7f)
-                        val x = center.x - span + i * slot + slot / 2f
-                        drawRoundRect(
-                            color = MarkCream,
-                            topLeft = Offset(x - barW / 2f, center.y - h / 2f),
-                            size = Size(barW, h),
-                            cornerRadius = CornerRadius(barW / 2f, barW / 2f),
-                        )
-                    }
-                }
-            }
         }
     }
 }

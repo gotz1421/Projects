@@ -71,7 +71,7 @@ object RewriteEngine {
     private fun endpointFor(settings: Settings): String {
         if (settings.provider == "custom") {
             val url = settings.customEndpoint.trim()
-            if (url.isEmpty()) throw IllegalStateException("Custom endpoint not configured. Open settings.")
+            if (url.isEmpty()) throw IllegalStateException(tr("No hay endpoint personalizado. Abre los ajustes.", "Custom endpoint not configured. Open settings."))
             return url
         }
         val p = Defaults.PROVIDERS[settings.provider]
@@ -238,13 +238,13 @@ object RewriteEngine {
     }
 
     fun streamWithPrompt(settings: Settings, prompt: String, text: String): Flow<String> = callbackFlow {
-        if (settings.apiKey.isBlank()) throw IllegalStateException("No API key configured.")
+        if (settings.apiKey.isBlank()) throw IllegalStateException(tr("No hay clave de API configurada.", "No API key configured."))
         val url = endpointFor(settings)
         val provider = settings.provider
         val model = settings.model.trim().ifEmpty {
             Defaults.PROVIDERS[provider]?.defaultModel.orEmpty()
         }
-        if (model.isEmpty()) throw IllegalStateException("No model configured.")
+        if (model.isEmpty()) throw IllegalStateException(tr("No hay modelo configurado.", "No model configured."))
 
         val isAnthropic = provider == "anthropic"
         val userContent = buildUserContent(prompt, text)

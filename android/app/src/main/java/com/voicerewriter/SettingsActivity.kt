@@ -72,10 +72,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
-import com.voicerewriter.ui.MarkCream
+import com.voicerewriter.ui.FlowWhite
 import com.voicerewriter.ui.MonoEyebrow
-import com.voicerewriter.ui.OpenWisprTheme
-import com.voicerewriter.ui.SunsetBrush
+import com.voicerewriter.ui.VoiceFlowTheme
+import com.voicerewriter.ui.FlowBrush
 import com.voicerewriter.ui.Wordmark
 import kotlinx.coroutines.launch
 
@@ -93,7 +93,7 @@ class SettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val repo = SettingsRepository(applicationContext)
         setContent {
-            OpenWisprTheme {
+            VoiceFlowTheme {
                 SettingsScreen(repo) { lifecycleScope.launch { it() } }
             }
         }
@@ -146,7 +146,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
 
     val overlayLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (android.provider.Settings.canDrawOverlays(context)) { SetupUtils.startBubble(context); bubbleOn = true }
-        else Toast.makeText(context, "Permission needed to show the bubble", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(context, tr("Se necesita el permiso para mostrar la burbuja", "Permission needed to show the bubble"), Toast.LENGTH_SHORT).show()
     }
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> notifOn = granted }
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> micGranted = granted }
@@ -252,7 +252,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                 else WhisperModelManager.download(context, id) { p -> dlProgress = p }
                 sttModel = id; dlId = null; modelsRev++; persist()
             } catch (e: Exception) {
-                dlId = null; Toast.makeText(context, e.message ?: "Download failed", Toast.LENGTH_LONG).show()
+                dlId = null; Toast.makeText(context, e.message ?: tr("Falló la descarga", "Download failed"), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -273,7 +273,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             val mb = freed / (1024 * 1024)
             Toast.makeText(
                 context,
-                if (mb > 0) "Deleted ${target.label} — ${mb}MB freed" else "Deleted ${target.label}",
+                if (mb > 0) tr("Se eliminó ${target.label}: se liberaron ${mb}MB", "Deleted ${target.label} — ${mb}MB freed") else tr("Se eliminó ${target.label}", "Deleted ${target.label}"),
                 Toast.LENGTH_SHORT,
             ).show()
         }
@@ -286,7 +286,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                 LlmModelManager.download(context, id) { p -> dlProgress = p }
                 provider = "local"; model = id; dlId = null; modelsRev++; persist()
             } catch (e: Exception) {
-                dlId = null; Toast.makeText(context, e.message ?: "Download failed", Toast.LENGTH_LONG).show()
+                dlId = null; Toast.makeText(context, e.message ?: tr("Falló la descarga", "Download failed"), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -302,14 +302,14 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             val setupComplete = bubbleOn && a11yEnabled && micGranted
             SetupStatusCard(setupComplete) {
                 if (!setupComplete) {
-                    StatusRow("Microphone", if (micGranted) "On" else "Needed to hear you", micGranted) {
-                        if (!micGranted) PillButton("Enable") { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+                    StatusRow(tr("Micrófono", "Microphone"), if (micGranted) tr("Activado", "On") else tr("Necesario para escucharte", "Needed to hear you"), micGranted) {
+                        if (!micGranted) PillButton(tr("Activar", "Enable")) { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
                     }
-                    StatusRow("Floating bubble", if (bubbleOn) "On" else "Tap-to-talk over any app", bubbleOn) {
-                        if (!bubbleOn) PillButton("Enable") { enableBubble() }
+                    StatusRow(tr("Burbuja flotante", "Floating bubble"), if (bubbleOn) tr("Activada", "On") else tr("Toca para hablar sobre cualquier app", "Tap-to-talk over any app"), bubbleOn) {
+                        if (!bubbleOn) PillButton(tr("Activar", "Enable")) { enableBubble() }
                     }
-                    StatusRow("Auto-insert", if (a11yEnabled) "On" else "Types text into the field you're in", a11yEnabled) {
-                        PillButton(if (a11yEnabled) "Manage" else "Enable") {
+                    StatusRow(tr("Inserción automática", "Auto-insert"), if (a11yEnabled) tr("Activada", "On") else tr("Escribe el texto en el campo donde estás", "Types text into the field you're in"), a11yEnabled) {
+                        PillButton(if (a11yEnabled) tr("Administrar", "Manage") else tr("Activar", "Enable")) {
                             // Enabling is a first-time grant → show the required disclosure first.
                             // "Manage" (already enabled) goes straight to system settings.
                             if (a11yEnabled) openA11ySettings() else showA11yConsent = true
@@ -337,14 +337,34 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                 )
             }
 
-            // ---------------- VOICE · TRANSCRIPTION ----------------
-            Section("Voice · transcription") {
+            // ---------------- LANGUAGE ----------------
+            // Spanish by default; the whole app (screens, bubble notification, tones) follows this.
+            Section(tr("Idioma", "Language")) {
                 Card {
                     Padded {
-                        Label("Engine")
+                        Label(tr("Idioma de la app", "App language"))
                         Spacer(Modifier.height(12.dp))
                         Segment(
-                            options = listOf("local" to "On-device", "groq" to "Groq", "openai" to "OpenAI", "custom" to "Custom"),
+                            options = listOf(Lang.ES to "Español", Lang.EN to "English"),
+                            selected = Lang.code,
+                            onSelect = { code ->
+                                Lang.set(context, code)
+                                // The bubble's notification text is built once; rebuild it in the new language.
+                                BubbleService.instance?.refreshNotification()
+                            },
+                        )
+                    }
+                }
+            }
+
+            // ---------------- VOICE · TRANSCRIPTION ----------------
+            Section(tr("Voz · transcripción", "Voice · transcription")) {
+                Card {
+                    Padded {
+                        Label(tr("Motor", "Engine"))
+                        Spacer(Modifier.height(12.dp))
+                        Segment(
+                            options = listOf("local" to tr("En el teléfono", "On-device"), "groq" to "Groq", "openai" to "OpenAI", "custom" to tr("Otro", "Custom")),
                             selected = sttProvider,
                             onSelect = {
                                 sttProvider = it
@@ -359,7 +379,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     if (sttProvider == "local") {
                         Divider()
                         Padded {
-                            Text("Models download once, then run fully offline.",
+                            Text(tr("Los modelos se descargan una vez y luego funcionan sin internet.", "Models download once, then run fully offline."),
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(6.dp))
                             // Which model suits *this* phone, not which is biggest. The list
@@ -385,32 +405,35 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     } else {
                         Divider()
                         Padded {
-                            Label("API key")
+                            Label(tr("Clave de API", "API key"))
                             Spacer(Modifier.height(8.dp))
                             KeyField(sttKey, Defaults.STT_PROVIDERS[sttProvider]?.let { keyPlaceholder(sttProvider) } ?: "key") { sttKey = it; persist() }
                             if (sttProvider == "custom") {
                                 Spacer(Modifier.height(10.dp))
-                                KeyField(sttEndpoint, "Transcription endpoint URL") { sttEndpoint = it; persist() }
+                                KeyField(sttEndpoint, tr("URL del endpoint de transcripción", "Transcription endpoint URL")) { sttEndpoint = it; persist() }
                                 Spacer(Modifier.height(10.dp))
-                                KeyField(sttModel, "Model id") { sttModel = it; persist() }
+                                KeyField(sttModel, tr("ID del modelo", "Model id")) { sttModel = it; persist() }
                             }
                             Spacer(Modifier.height(10.dp))
                             InfoNote(buildString {
-                                append("Audio is sent to ")
-                                append(if (sttProvider == "groq") "Groq" else if (sttProvider == "openai") "OpenAI" else "your provider")
-                                append(" for transcription.")
+                                append(tr("El audio se envía a ", "Audio is sent to "))
+                                append(if (sttProvider == "groq") "Groq" else if (sttProvider == "openai") "OpenAI" else tr("tu proveedor", "your provider"))
+                                append(tr(" para transcribirlo.", " for transcription."))
                             }) { sttProvider = "local"; persist() }
                         }
                     }
                     Divider()
-                    ToggleRow("Auto-stop on pause", "End recording when you stop talking", vadAutoStop) { vadAutoStop = it; persist() }
+                    ToggleRow(tr("Detener al hacer pausa", "Auto-stop on pause"), tr("Termina la grabación cuando dejas de hablar", "End recording when you stop talking"), vadAutoStop) { vadAutoStop = it; persist() }
                     if (sttProvider == "local" && OnDeviceStt.isParakeet(OnDeviceStt.resolveModel(sttModel))) {
                         Divider()
                         ToggleRow(
-                            "Vocab-biased decoding (experimental)",
-                            "Tries harder to hit your personal dictionary during transcription, not just after. " +
+                            tr("Decodificación con tu diccionario (experimental)", "Vocab-biased decoding (experimental)"),
+                            tr("Intenta acertar las palabras de tu diccionario durante la transcripción, no solo después. " +
+                                "Usa un modo con un error conocido que a veces devuelve texto vacío o incorrecto. " +
+                                "Déjalo apagado salvo que lo estés probando.",
+                                "Tries harder to hit your personal dictionary during transcription, not just after. " +
                                 "Uses a decode mode with a known upstream bug that occasionally returns blank or " +
-                                "wrong text. Leave off unless you're testing it.",
+                                "wrong text. Leave off unless you're testing it."),
                             parakeetHotwordsExperimental,
                         ) { parakeetHotwordsExperimental = it; persist() }
                     }
@@ -418,13 +441,13 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             }
 
             // ---------------- CLEANUP & POLISH ----------------
-            Section("Cleanup & polish") {
+            Section(tr("Limpieza y pulido", "Cleanup & polish")) {
                 Card {
-                    ToggleRow("Smart cleanup", "Fillers, punctuation, numbers, backtracking · on-device, instant", deterministicCleanup) { deterministicCleanup = it; persist() }
+                    ToggleRow(tr("Limpieza inteligente", "Smart cleanup"), tr("Muletillas, puntuación, números, correcciones · en el teléfono, al instante", "Fillers, punctuation, numbers, backtracking · on-device, instant"), deterministicCleanup) { deterministicCleanup = it; persist() }
                     Divider()
                     Padded {
-                        Text("AI polish", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                        Text("An optional model refines the cleaned text.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(tr("Pulir con IA", "Polish with AI"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(tr("Un modelo opcional mejora el texto ya limpio.", "An optional model refines the cleaned text."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(12.dp))
                         Segment(
                             options = PolishLevel.entries.map { it.name.lowercase() to it.label },
@@ -434,15 +457,15 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                         Spacer(Modifier.height(11.dp))
                         Text(polishLevel.blurb, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
-                        Text("Polish always keeps your words and meaning. It falls back to the clean text if it strays.",
+                        Text(tr("El pulido siempre respeta tus palabras y su sentido. Si se desvía, se usa el texto limpio.", "Polish always keeps your words and meaning. It falls back to the clean text if it strays."),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
 
                         if (polishLevel != PolishLevel.OFF) {
                             Spacer(Modifier.height(14.dp))
-                            DisclosureHeader("Advanced polish model", advancedOpen) { advancedOpen = !advancedOpen }
+                            DisclosureHeader(tr("Modelo de pulido avanzado", "Advanced polish model"), advancedOpen) { advancedOpen = !advancedOpen }
                             AnimatedVisibility(visible = advancedOpen) {
                                 Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Label("Polish model")
+                                    Label(tr("Modelo de pulido", "Polish model"))
                                     modelsRev
                                     LlmModelManager.MODELS.forEach { m ->
                                         ModelRow(
@@ -456,13 +479,13 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                                     }
                                     Column {
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text("Creativity", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(tr("Creatividad", "Creativity"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                                             Text("%.1f".format(temperature), style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         Slider(value = temperature, onValueChange = { temperature = it }, onValueChangeFinished = { persist() }, valueRange = 0f..1f)
                                     }
-                                    ToggleRowBare("Anti-AI phrasing", antiAI) { antiAI = it; persist() }
-                                    DisclosureHeader("Use a cloud model instead", cloudLlmOpen) { cloudLlmOpen = !cloudLlmOpen }
+                                    ToggleRowBare(tr("Evitar frases de IA", "Anti-AI phrasing"), antiAI) { antiAI = it; persist() }
+                                    DisclosureHeader(tr("Usar un modelo en la nube", "Use a cloud model instead"), cloudLlmOpen) { cloudLlmOpen = !cloudLlmOpen }
                                     AnimatedVisibility(visible = cloudLlmOpen) {
                                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                             Segment(
@@ -471,9 +494,9 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                                                 onSelect = { p -> provider = p; Defaults.PROVIDERS[p]?.defaultModel?.takeIf { it.isNotEmpty() }?.let { model = it }; persist() },
                                             )
                                             if (provider != "local") {
-                                                if (provider == "custom") KeyField(customEndpoint, "Endpoint URL") { customEndpoint = it; persist() }
-                                                KeyField(model, "Model id") { model = it; persist() }
-                                                KeyField(apiKey, "API key") { apiKey = it; persist() }
+                                                if (provider == "custom") KeyField(customEndpoint, tr("URL del endpoint", "Endpoint URL")) { customEndpoint = it; persist() }
+                                                KeyField(model, tr("ID del modelo", "Model id")) { model = it; persist() }
+                                                KeyField(apiKey, tr("Clave de API", "API key")) { apiKey = it; persist() }
                                             }
                                         }
                                     }
@@ -485,9 +508,9 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             }
 
             // ---------------- BUBBLE ----------------
-            Section("Bubble") {
+            Section(tr("Burbuja", "Bubble")) {
                 Card {
-                    ToggleRow("Show bubble", "The floating tap-to-talk button", bubbleOn) { want ->
+                    ToggleRow(tr("Mostrar burbuja", "Show bubble"), tr("El botón flotante para dictar", "The floating tap-to-talk button"), bubbleOn) { want ->
                         if (want) enableBubble() else { SetupUtils.stopBubble(context); bubbleOn = false }
                     }
                     Divider()
@@ -496,9 +519,9 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     // reading "on" while the bubble is in fact always visible, which looks like the
                     // setting broke. Say so instead.
                     ToggleRow(
-                        "Only on text fields",
-                        if (bubbleOnlyOnFields && !a11yEnabled) "Needs auto-insert. The bubble stays visible until you turn it back on."
-                        else "Appear only when you can type",
+                        tr("Solo al escribir", "Only when typing"),
+                        if (bubbleOnlyOnFields && !a11yEnabled) tr("Requiere la inserción automática. La burbuja se queda visible hasta que la actives.", "Needs auto-insert. The bubble stays visible until you turn it back on.")
+                        else tr("Aparece cada vez que se abre el teclado", "Appears whenever the keyboard opens"),
                         bubbleOnlyOnFields,
                     ) { bubbleOnlyOnFields = it; persist() }
                     Divider()
@@ -506,7 +529,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     // drag; it still goes fully opaque while touched or recording.
                     Column {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Bubble opacity", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text(tr("Opacidad de la burbuja", "Bubble opacity"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                             Text("${(bubbleOpacity * 100).toInt()}%", style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Slider(
@@ -523,9 +546,9 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             }
 
             // ---------------- PRIVACY ----------------
-            Section("Privacy") {
+            Section(tr("Privacidad", "Privacy")) {
                 Card {
-                    ToggleRow("Keep history", "Stored on this device · powers personalization", keepHistory) {
+                    ToggleRow(tr("Guardar historial", "Keep history"), tr("Se guarda en este teléfono · mejora la personalización", "Stored on this device · powers personalization"), keepHistory) {
                         keepHistory = it
                         DictationHistory.setKeepHistory(context, it)
                         // "Nothing is saved to disk" has to include the audio, so turning
@@ -535,16 +558,17 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     if (keepHistory) {
                         Divider()
                         Padded {
-                            Label("Keep audio")
+                            Label(tr("Guardar audio", "Keep audio"))
                             Text(
-                                "Recordings stay on this device so a dictation that fails can be run " +
-                                    "again. Never uploaded.",
+                                tr("Las grabaciones se quedan en este teléfono para poder reintentar un dictado " +
+                                    "que falle. Nunca se suben.", "Recordings stay on this device so a dictation that fails can be run " +
+                                    "again. Never uploaded."),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.height(11.dp))
                             Segment(
-                                options = listOf("7" to "7 days", "30" to "30 days", "90" to "90 days", "0" to "Forever"),
+                                options = listOf("7" to tr("7 días", "7 days"), "30" to tr("30 días", "30 days"), "90" to tr("90 días", "90 days"), "0" to tr("Siempre", "Forever")),
                                 selected = audioKeepDays.toString(),
                                 onSelect = { d ->
                                     audioKeepDays = d.toInt()
@@ -554,35 +578,35 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                         }
                     }
                     Divider()
-                    NavRow("Clear all data", danger = true, icon = Icons.Default.Delete) {
+                    NavRow(tr("Borrar todos los datos", "Clear all data"), danger = true, icon = Icons.Default.Delete) {
                         launch {
                             DictationHistory.all(context).forEach { DictationHistory.delete(context, it.id) }
                             PendingAudio.purgeAll(context)
                         }
-                        Toast.makeText(context, "On-device history cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, tr("Se borró el historial del teléfono", "On-device history cleared"), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
 
             // ---------------- PERSONALIZATION ----------------
-            Section("Personalization") {
+            Section(tr("Personalización", "Personalization")) {
                 Card {
-                    NavRow("Personal dictionary", "Names & terms you taught it") { context.startActivity(Intent(context, VocabActivity::class.java)) }
+                    NavRow(tr("Diccionario personal", "Personal dictionary"), tr("Palabras, nombres y cómo los pronuncias", "Words, names and how you say them")) { context.startActivity(Intent(context, VocabActivity::class.java)) }
                     Divider()
-                    NavRow("Learned from edits", "Corrections it remembered") { context.startActivity(Intent(context, LearnedVocabActivity::class.java)) }
+                    NavRow(tr("Palabras aprendidas", "Learned words"), tr("Correcciones que recordó", "Corrections it remembered")) { context.startActivity(Intent(context, LearnedVocabActivity::class.java)) }
                     Divider()
-                    NavRow("Style memory", "On-device examples · never uploaded") { context.startActivity(Intent(context, StyleMemoryActivity::class.java)) }
+                    NavRow(tr("Memoria de estilo", "Style memory"), tr("Ejemplos en el teléfono · nunca se suben", "On-device examples · never uploaded")) { context.startActivity(Intent(context, StyleMemoryActivity::class.java)) }
                     Divider()
-                    NavRow("Tone by app", "Email, chat, code, notes") { context.startActivity(Intent(context, AppToneActivity::class.java)) }
+                    NavRow(tr("Tono por app", "Tone by app"), tr("Correo, chat, redes, notas · elige las apps", "Email, chat, social, notes · pick the apps")) { context.startActivity(Intent(context, AppToneActivity::class.java)) }
                     Divider()
-                    NavRow("Import from contacts", "Matched on-device · never uploaded") { context.startActivity(Intent(context, ContactsImportActivity::class.java)) }
+                    NavRow(tr("Importar de contactos", "Import from contacts"), tr("Se procesa en el teléfono · nunca se sube", "Matched on-device · never uploaded")) { context.startActivity(Intent(context, ContactsImportActivity::class.java)) }
                 }
             }
 
             // ---------------- RELIABILITY ----------------
-            Section("Reliability") {
+            Section(tr("Confiabilidad", "Reliability")) {
                 Card {
-                    NavRow("Auto-start helper", "For Samsung, Xiaomi, OnePlus, Oppo") {
+                    NavRow(tr("Inicio automático y batería", "Auto-start & battery"), tr("Para Samsung, Xiaomi, OnePlus, Oppo: elige \"Sin restricciones\"", "For Samsung, Xiaomi, OnePlus, Oppo: choose \"Unrestricted\"")) {
                         val intent = SetupUtils.oemAutoStartIntents().firstOrNull { it.resolveActivity(context.packageManager) != null }
                             ?: SetupUtils.appInfoIntent(context)
                         runCatching { context.startActivity(intent) }
@@ -596,32 +620,32 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             // Play review, which we can reply to but not ask questions in. Both rows prefill the
             // version/device details and then hand off to the user's own mail app or browser;
             // nothing is transmitted by us.
-            Section("Feedback") {
+            Section(tr("Comentarios", "Feedback")) {
                 Card {
-                    NavRow("Send feedback", "Email us. Ideas, bugs, anything.") {
-                        launchOrNotify(context, Feedback.emailIntent(context), "No email app found. Write to ${Feedback.EMAIL}")
+                    NavRow(tr("Enviar comentarios", "Send feedback"), tr("Al equipo original de OpenWispr", "To the original OpenWispr team")) {
+                        launchOrNotify(context, Feedback.emailIntent(context), tr("No hay app de correo. Escribe a ${Feedback.EMAIL}", "No email app found. Write to ${Feedback.EMAIL}"))
                     }
                     Divider()
-                    NavRow("Report a problem", "Open an issue on GitHub") {
-                        launchOrNotify(context, Feedback.issueIntent(context), "Couldn't open a browser.")
+                    NavRow(tr("Reportar un problema", "Report a problem"), tr("Abre un issue en GitHub", "Open an issue on GitHub")) {
+                        launchOrNotify(context, Feedback.issueIntent(context), tr("No se pudo abrir el navegador.", "Couldn't open a browser."))
                     }
                     Divider()
-                    NavRow("Rate OpenWispr", "Leave a review on Google Play") {
-                        launchOrNotify(context, Feedback.playListingIntent(context), "Couldn't open Google Play.")
+                    NavRow(tr("Calificar OpenWispr", "Rate OpenWispr"), tr("El proyecto original en Google Play", "The original project on Google Play")) {
+                        launchOrNotify(context, Feedback.playListingIntent(context), tr("No se pudo abrir Google Play.", "Couldn't open Google Play."))
                     }
                 }
             }
 
-            Section("General") {
+            Section(tr("General", "General")) {
                 Card {
-                    NavRow("Replay onboarding", "Walk through setup again") { context.startActivity(OnboardingActivity.intent(context)) }
+                    NavRow(tr("Repetir la introducción", "Replay onboarding"), tr("Volver a ver la configuración inicial", "Walk through setup again")) { context.startActivity(OnboardingActivity.intent(context)) }
                     Divider()
                     // remember: this is a binder call into PackageManager, and the version can't
                     // change while the screen is up.
                     val version = remember { appVersion(context) }
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Version", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                        Text("$version · open source", style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(tr("Versión", "Version"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                        Text("$version · " + tr("código abierto", "open source"), style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -651,18 +675,20 @@ private data class DeletableModel(
 private fun DeleteModelDialog(target: DeletableModel, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete ${target.label}?") },
+        title = { Text(tr("¿Eliminar ${target.label}?", "Delete ${target.label}?")) },
         text = {
             Text(
-                "This frees ${target.size.removePrefix("~")} on this device. The model stays " +
+                tr("Esto libera ${target.size.removePrefix("~")} en este teléfono. El modelo sigue " +
+                    "disponible: puedes volver a descargarlo desde esta pantalla cuando quieras (requiere conexión).",
+                    "This frees ${target.size.removePrefix("~")} on this device. The model stays " +
                     "available — you can download it again from this screen whenever you want it, " +
-                    "which needs a connection.",
+                    "which needs a connection."),
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Delete", color = Color(0xFFB4502E)) }
+            TextButton(onClick = onConfirm) { Text(tr("Eliminar", "Delete"), color = Color(0xFFDC2626)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Conservar", "Keep")) } },
     )
 }
 
@@ -679,7 +705,7 @@ private fun sttModelOptions(recommendedId: String): List<SttModelOption> = build
     add(
         SttModelOption(
             ParakeetModelManager.MODEL_ID, "Parakeet",
-            "${ParakeetModelManager.SIZE_LABEL} · most accurate",
+            "${ParakeetModelManager.SIZE_LABEL} · " + tr("el más preciso", "most accurate"),
             OnDeviceStt.isParakeet(recommendedId),
         ),
     )
@@ -689,7 +715,7 @@ private fun sttModelOptions(recommendedId: String): List<SttModelOption> = build
 }
 
 private fun keyPlaceholder(provider: String) = when (provider) {
-    "groq" -> "gsk_..."; "openai" -> "sk-..."; else -> "key or endpoint"
+    "groq" -> "gsk_..."; "openai" -> "sk-..."; else -> tr("clave o endpoint", "key or endpoint")
 }
 
 /* ------------------------ reusable pieces ------------------------ */
@@ -697,12 +723,12 @@ private fun keyPlaceholder(provider: String) = when (provider) {
 @Composable
 private fun HeroHeader() {
     Column(
-        Modifier.fillMaxWidth().background(SunsetBrush).statusBarsPadding().padding(24.dp, 22.dp, 24.dp, 24.dp),
+        Modifier.fillMaxWidth().background(FlowBrush).statusBarsPadding().padding(24.dp, 22.dp, 24.dp, 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_aperture), null, tint = MarkCream, modifier = Modifier.size(40.dp))
-            Text("Settings", color = MarkCream, style = Wordmark)
+            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_voiceflow), null, tint = FlowWhite, modifier = Modifier.size(40.dp))
+            Text(tr("Ajustes", "Settings"), color = FlowWhite, style = Wordmark)
         }
     }
 }
@@ -748,12 +774,12 @@ private fun SetupStatusCard(complete: Boolean, content: @Composable androidx.com
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFE7F3EA)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Check, null, tint = Color(0xFF3E8E5A), modifier = Modifier.size(20.dp))
+            Box(Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFD1FAE5)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Check, null, tint = Color(0xFF047857), modifier = Modifier.size(20.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(if (complete) "You're all set" else "Finish setup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text(if (complete) "Microphone · Bubble · Auto-insert all active" else "A couple of quick permissions", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (complete) tr("Todo listo", "You're all set") else tr("Termina la configuración", "Finish setup"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(if (complete) tr("Micrófono · Burbuja · Inserción automática activos", "Microphone · Bubble · Auto-insert all active") else tr("Un par de permisos rápidos", "A couple of quick permissions"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         content()
@@ -815,27 +841,27 @@ private fun ModelRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
-                    if (recommended) Badge("Recommended", Color(0xFF3E8E5A), Color(0xFFE7F3EA))
+                    if (recommended) Badge(tr("Recomendado", "Recommended"), Color(0xFF047857), Color(0xFFD1FAE5))
                 }
                 Text(meta, style = MonoEyebrow, fontSize = 11.sp, color = cs.onSurfaceVariant)
             }
             when (state) {
-                "active" -> Badge("Active", Color(0xFF3E8E5A), Color(0xFFE7F3EA))
+                "active" -> Badge(tr("Activo", "Active"), Color(0xFF047857), Color(0xFFD1FAE5))
                 "downloaded" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (onDelete != null) {
                         IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                             Icon(
                                 Icons.Filled.Delete,
-                                contentDescription = "Delete $name",
+                                contentDescription = tr("Eliminar $name", "Delete $name"),
                                 tint = cs.onSurfaceVariant,
                                 modifier = Modifier.size(19.dp),
                             )
                         }
                     }
-                    PillOutline("Use", onUse)
+                    PillOutline(tr("Usar", "Use"), onUse)
                 }
                 "downloading" -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.5.dp, color = cs.primary)
-                else -> PillButton("Get", onGet)
+                else -> PillButton(tr("Descargar", "Get"), onGet)
             }
         }
         if (state == "downloading") {
@@ -876,7 +902,7 @@ private fun ToggleRowBare(title: String, checked: Boolean, onChange: (Boolean) -
 
 @Composable
 private fun NavRow(title: String, subtitle: String? = null, danger: Boolean = false, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
-    val color = if (danger) Color(0xFFB4502E) else MaterialTheme.colorScheme.onSurface
+    val color = if (danger) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
     Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = color)
@@ -899,7 +925,7 @@ private fun InfoNote(text: String, onSwitch: () -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(12.dp)) {
         Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
-        Text("Switch to on-device to keep everything private.", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable { onSwitch() })
+        Text(tr("Cambia a \"en el teléfono\" para que todo sea privado.", "Switch to on-device to keep everything private."), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable { onSwitch() })
     }
 }
 

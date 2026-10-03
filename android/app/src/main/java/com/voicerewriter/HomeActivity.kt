@@ -64,12 +64,12 @@ import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
-import com.voicerewriter.ui.BrandCoral
-import com.voicerewriter.ui.MarkCream
+import com.voicerewriter.ui.FlowBlue
+import com.voicerewriter.ui.FlowWhite
 import com.voicerewriter.ui.Mulish
-import com.voicerewriter.ui.OpenWisprTheme
+import com.voicerewriter.ui.VoiceFlowTheme
 import com.voicerewriter.ui.PlexMono
-import com.voicerewriter.ui.SunsetBrush
+import com.voicerewriter.ui.FlowBrush
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,7 +88,7 @@ class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge() // draw under the status/nav bars; the cream/plum bg fills the whole screen
         super.onCreate(savedInstanceState)
-        setContent { OpenWisprTheme { HomeScreen() } }
+        setContent { VoiceFlowTheme { HomeScreen() } }
         // First launch: route once into onboarding (it returns here when finished).
         lifecycleScope.launch {
             val done = withContext(Dispatchers.IO) {
@@ -165,7 +165,7 @@ class HomeActivity : ComponentActivity() {
                         // this screen that still needs the user, so they lead.
                         if (d != null && d.unfinished.isNotEmpty()) {
                             Text(
-                                "Unfinished",
+                                tr("Sin terminar", "Unfinished"),
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 modifier = Modifier.padding(top = 26.dp, bottom = 12.dp),
@@ -177,7 +177,7 @@ class HomeActivity : ComponentActivity() {
                                     onDelete = {
                                         scope.launch {
                                             withContext(Dispatchers.IO) { PendingAudio.discard(ctx, rec.id) }
-                                            reload(); showToast("Recording deleted")
+                                            reload(); showToast(tr("Grabación eliminada", "Recording deleted"))
                                         }
                                     },
                                 )
@@ -187,7 +187,7 @@ class HomeActivity : ComponentActivity() {
                         }
 
                         Text(
-                            "Recent",
+                            tr("Recientes", "Recent"),
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.padding(top = 26.dp, bottom = 12.dp),
@@ -210,7 +210,7 @@ class HomeActivity : ComponentActivity() {
                                         },
                                         onCopy = {
                                             val txt = if (viewBefore.contains(e.id)) e.before else e.after
-                                            copyToClipboard(txt); showToast("Copied to clipboard")
+                                            copyToClipboard(txt); showToast(tr("Copiado al portapapeles", "Copied to clipboard"))
                                         },
                                         onEdit = {
                                             editOpen = if (editOpen == e.id) null else e.id
@@ -233,7 +233,7 @@ class HomeActivity : ComponentActivity() {
                                                         }
                                                     }
                                                     editOpen = null
-                                                    reload(); showToast("Saved & learned")
+                                                    reload(); showToast(tr("Guardado y aprendido", "Saved & learned"))
                                                 }
                                             } else {
                                                 editOpen = null
@@ -249,7 +249,7 @@ class HomeActivity : ComponentActivity() {
                                                 withContext(Dispatchers.IO) { DictationHistory.delete(ctx, e.id) }
                                                 if (teachOpen == e.id) teachOpen = null
                                                 if (editOpen == e.id) editOpen = null
-                                                reload(); showToast("Dictation deleted")
+                                                reload(); showToast(tr("Dictado eliminado", "Dictation deleted"))
                                             }
                                         },
                                         onSaveTeach = { pairs ->
@@ -261,7 +261,7 @@ class HomeActivity : ComponentActivity() {
                                                         val repo = VocabRepository(ctx)
                                                         valid.forEach { (from, to) -> runCatching { repo.learnAlias(from, to) } }
                                                     }
-                                                    showToast(if (valid.size == 1) "Correction saved" else "${valid.size} corrections saved")
+                                                    showToast(if (valid.size == 1) tr("Corrección guardada", "Correction saved") else tr("${valid.size} correcciones guardadas", "${valid.size} corrections saved"))
                                                 }
                                                 teachOpen = null
                                             }
@@ -312,13 +312,13 @@ class HomeActivity : ComponentActivity() {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(
-                    painterResource(R.drawable.ic_aperture),
+                    painterResource(R.drawable.ic_voiceflow),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp),
                 )
                 Text(
-                    "OpenWispr",
+                    "VoiceFlow",
                     fontFamily = Mulish,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 19.sp,
@@ -327,8 +327,8 @@ class HomeActivity : ComponentActivity() {
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Box(Modifier.size(11.dp).clip(CircleShape).background(SunsetBrush))
-                Eyebrow("Ready")
+                Box(Modifier.size(11.dp).clip(CircleShape).background(FlowBrush))
+                Eyebrow(tr("Lista", "Ready"))
             }
         }
     }
@@ -343,18 +343,18 @@ class HomeActivity : ComponentActivity() {
         ) {
             Column(Modifier.padding(20.dp, 22.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    StatCell("Words", formatWords(stats?.totalWords ?: 0L), Modifier.weight(1f))
+                    StatCell(tr("Palabras", "Words"), formatWords(stats?.totalWords ?: 0L), Modifier.weight(1f))
                     StatDivider()
-                    StatCell("Saved", formatSaved(stats?.timeSavedMinutes ?: 0.0), Modifier.weight(1f))
+                    StatCell(tr("Ahorrado", "Saved"), formatSaved(stats?.timeSavedMinutes ?: 0.0), Modifier.weight(1f))
                     StatDivider()
-                    StatCell("Streak", (stats?.streakDays ?: 0).toString(), Modifier.weight(1f))
+                    StatCell(tr("Racha", "Streak"), (stats?.streakDays ?: 0).toString(), Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(16.dp))
                 Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)))
                 Spacer(Modifier.height(15.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    StatChip("Accept", rateLabel(stats?.acceptRate ?: -1))
-                    StatChip("On-device", rateLabel(stats?.onDeviceRate ?: -1))
+                    StatChip(tr("Aceptados", "Accept"), rateLabel(stats?.acceptRate ?: -1))
+                    StatChip(tr("En el teléfono", "On-device"), rateLabel(stats?.onDeviceRate ?: -1))
                 }
             }
         }
@@ -459,8 +459,8 @@ class HomeActivity : ComponentActivity() {
                 // meta chips
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MetaChip(durationLabel(entry.durationSec))
-                    MetaChip("${entry.words} words")
-                    if (entry.onDevice) MetaChip("on-device", dot = true)
+                    MetaChip(tr("${entry.words} palabras", "${entry.words} words"))
+                    if (entry.onDevice) MetaChip(tr("en el teléfono", "on-device"), dot = true)
                 }
 
                 // text (before / after) — or the inline editor when editing
@@ -485,10 +485,10 @@ class HomeActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceBetween) {
                         BeforeAfterToggle(showBefore, onToggleBefore)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ActionText("Edit", onClick = onEdit)
-                            ActionText("Copy", onClick = onCopy)
-                            ActionText("Teach", onClick = onTeach)
-                            ActionText("Delete", onClick = onDelete, color = MaterialTheme.colorScheme.error)
+                            ActionText(tr("Editar", "Edit"), onClick = onEdit)
+                            ActionText(tr("Copiar", "Copy"), onClick = onCopy)
+                            ActionText(tr("Enseñar", "Teach"), onClick = onTeach)
+                            ActionText(tr("Eliminar", "Delete"), onClick = onDelete, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -512,7 +512,7 @@ class HomeActivity : ComponentActivity() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
-                        rec.appLabel.ifBlank { "Dictation" },
+                        rec.appLabel.ifBlank { tr("Dictado", "Dictation") },
                         fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -521,21 +521,21 @@ class HomeActivity : ComponentActivity() {
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MetaChip(durationLabel(rec.durationSec))
-                    MetaChip("audio saved", dot = true)
+                    MetaChip(tr("audio guardado", "audio saved"), dot = true)
                 }
                 Text(
-                    "This one didn't finish transcribing. The recording is still on this device. Run it again.",
+                    tr("Este no terminó de transcribirse. La grabación sigue en este teléfono. Vuelve a procesarla.", "This one didn't finish transcribing. The recording is still on this device. Run it again."),
                     fontFamily = Mulish, fontSize = 13.sp, lineHeight = 19.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically) {
-                    ActionText("Delete", onClick = onDelete, color = MaterialTheme.colorScheme.error)
+                    ActionText(tr("Eliminar", "Delete"), onClick = onDelete, color = MaterialTheme.colorScheme.error)
                     Box(
                         Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary)
                             .clickable(onClick = onRetry).padding(18.dp, 9.dp),
                     ) {
-                        Text("Retry", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                        Text(tr("Reintentar", "Retry"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
@@ -548,8 +548,8 @@ class HomeActivity : ComponentActivity() {
         Row(
             Modifier.clip(RoundedCornerShape(9.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(3.dp),
         ) {
-            SegItem("Before", selected = showBefore) { onToggle(true) }
-            SegItem("After", selected = !showBefore) { onToggle(false) }
+            SegItem(tr("Antes", "Before"), selected = showBefore) { onToggle(true) }
+            SegItem(tr("Después", "After"), selected = !showBefore) { onToggle(false) }
         }
     }
 
@@ -597,21 +597,21 @@ class HomeActivity : ComponentActivity() {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                Eyebrow(if (pairs.size > 1) "Teach corrections" else "Teach a correction", size = 10f, tracking = 0.1)
+                Eyebrow(if (pairs.size > 1) tr("Enseñar correcciones", "Teach corrections") else tr("Enseñar una corrección", "Teach a correction"), size = 10f, tracking = 0.1)
                 pairs.forEachIndexed { i, (from, to) ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)))
-                    TeachField("When I say", from, { setFrom(i, it) }, "distil")
+                    TeachField(tr("Cuando diga", "When I say"), from, { setFrom(i, it) }, "distil")
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.weight(1f)) { TeachField("Write", to, { setTo(i, it) }, "DistilWhisper") }
+                        Box(Modifier.weight(1f)) { TeachField(tr("Escribe", "Write"), to, { setTo(i, it) }, "DistilWhisper") }
                         if (pairs.size > 1) {
-                            Text("Remove", fontFamily = Mulish, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Text(tr("Quitar", "Remove"), fontFamily = Mulish, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
                                     .clickable { pairs = pairs.filterIndexed { idx, _ -> idx != i }.ifEmpty { listOf("" to "") } }
                                     .padding(8.dp, 18.dp))
                         }
                     }
                 }
-                Text("+ Add another", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                Text(tr("+ Agregar otra", "+ Add another"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { pairs = pairs + ("" to "") }.padding(6.dp, 4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -619,10 +619,10 @@ class HomeActivity : ComponentActivity() {
                         Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary)
                             .clickable { onSave(pairs) }.padding(18.dp, 9.dp),
                     ) {
-                        Text("Save", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                        Text(tr("Guardar", "Save"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimary)
                     }
-                    Text("Cancel", fontFamily = Mulish, fontWeight = FontWeight.Medium, fontSize = 13.sp,
+                    Text(tr("Cancelar", "Cancel"), fontFamily = Mulish, fontWeight = FontWeight.Medium, fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onCancel).padding(14.dp, 9.dp))
                 }
@@ -659,7 +659,7 @@ class HomeActivity : ComponentActivity() {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                Eyebrow(if (fullText) "Edit full text" else "Tap a word to fix it", size = 10f, tracking = 0.1)
+                Eyebrow(if (fullText) tr("Editar texto completo", "Edit full text") else tr("Toca una palabra para corregirla", "Tap a word to fix it"), size = 10f, tracking = 0.1)
 
                 if (fullText) {
                     Surface(
@@ -705,7 +705,7 @@ class HomeActivity : ComponentActivity() {
                     if (editIdx != null) {
                         val original = tokens.getOrNull(editIdx!!)?.value ?: ""
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Fix “$original”", fontFamily = Mulish, fontSize = 11.sp, color = cs.onSurfaceVariant)
+                            Text(tr("Corregir «$original»", "Fix “$original”"), fontFamily = Mulish, fontSize = 11.sp, color = cs.onSurfaceVariant)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Surface(
                                     color = cs.surface, shape = RoundedCornerShape(8.dp),
@@ -724,7 +724,7 @@ class HomeActivity : ComponentActivity() {
                                     }
                                 }
                                 Text(
-                                    "Set", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cs.primary,
+                                    tr("Listo", "Set"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cs.primary,
                                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
                                         val i = editIdx
                                         val m = i?.let { tokens.getOrNull(it) }
@@ -737,7 +737,7 @@ class HomeActivity : ComponentActivity() {
                                     }.padding(10.dp, 8.dp),
                                 )
                                 Text(
-                                    "Cancel", fontFamily = Mulish, fontSize = 13.sp, color = cs.onSurfaceVariant,
+                                    tr("Cancelar", "Cancel"), fontFamily = Mulish, fontSize = 13.sp, color = cs.onSurfaceVariant,
                                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { editIdx = null }.padding(8.dp, 8.dp),
                                 )
                             }
@@ -746,7 +746,7 @@ class HomeActivity : ComponentActivity() {
                 }
 
                 Text(
-                    if (fullText) "Fix words" else "Edit full text",
+                    if (fullText) tr("Corregir palabras", "Fix words") else tr("Editar texto completo", "Edit full text"),
                     fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = cs.primary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { fullText = !fullText; editIdx = null }.padding(6.dp, 4.dp),
                 )
@@ -756,10 +756,10 @@ class HomeActivity : ComponentActivity() {
                         Modifier.clip(RoundedCornerShape(20.dp)).background(cs.primary)
                             .clickable { onSave(working, pairs.toList()) }.padding(18.dp, 9.dp),
                     ) {
-                        Text("Save", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cs.onPrimary)
+                        Text(tr("Guardar", "Save"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = cs.onPrimary)
                     }
                     Text(
-                        "Cancel", fontFamily = Mulish, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = cs.onSurfaceVariant,
+                        tr("Cancelar", "Cancel"), fontFamily = Mulish, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = cs.onSurfaceVariant,
                         modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onCancel).padding(14.dp, 9.dp),
                     )
                 }
@@ -818,13 +818,13 @@ class HomeActivity : ComponentActivity() {
         ) {
             Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.size(46.dp).clip(CircleShape).background(SunsetBrush), contentAlignment = Alignment.Center) {
-                    Icon(painterResource(R.drawable.ic_aperture), null, tint = MarkCream, modifier = Modifier.size(26.dp))
+                Box(Modifier.size(46.dp).clip(CircleShape).background(FlowBrush), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_voiceflow), null, tint = FlowWhite, modifier = Modifier.size(26.dp))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("History is off", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                    Text(tr("El historial está apagado", "History is off"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurface)
-                    Text("Nothing is saved to disk. Tap to turn it on in Settings.",
+                    Text(tr("No se guarda nada. Toca para activarlo en Ajustes.", "Nothing is saved to disk. Tap to turn it on in Settings."),
                         fontFamily = Mulish, fontSize = 12.5.sp, lineHeight = 18.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -842,9 +842,9 @@ class HomeActivity : ComponentActivity() {
         ) {
             Column(Modifier.fillMaxWidth().padding(36.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("No history yet", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                Text(tr("Todavía no hay historial", "No history yet"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface)
-                Text("Your dictations will appear here.", fontFamily = Mulish, fontSize = 13.sp,
+                Text(tr("Aquí aparecerán tus dictados.", "Your dictations will appear here."), fontFamily = Mulish, fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -865,25 +865,25 @@ class HomeActivity : ComponentActivity() {
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                     // Home (active)
-                    NavItem(label = "Home", selected = true, onClick = { haptic() }) {
-                        Icon(painterResource(R.drawable.ic_aperture), null,
+                    NavItem(label = tr("Inicio", "Home"), selected = true, onClick = { haptic() }) {
+                        Icon(painterResource(R.drawable.ic_voiceflow), null,
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                     }
                     // Talk (raised FAB)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            Modifier.offset(y = (-18).dp).size(58.dp).clip(CircleShape).background(SunsetBrush)
+                            Modifier.offset(y = (-18).dp).size(58.dp).clip(CircleShape).background(FlowBrush)
                                 .clickable { haptic(); onTalk() },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(painterResource(R.drawable.ic_aperture), null, tint = MarkCream,
+                            Icon(painterResource(R.drawable.ic_voiceflow), null, tint = FlowWhite,
                                 modifier = Modifier.size(30.dp))
                         }
-                        Text("Talk", fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                        Text(tr("Hablar", "Talk"), fontFamily = Mulish, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.offset(y = (-12).dp))
                     }
                     // Settings
-                    NavItem(label = "Settings", selected = false, onClick = { haptic(); onSettings() }) {
+                    NavItem(label = tr("Ajustes", "Settings"), selected = false, onClick = { haptic(); onSettings() }) {
                         Icon(painterResource(R.drawable.ic_settings_lines), null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
                     }
@@ -973,11 +973,13 @@ class HomeActivity : ComponentActivity() {
         return if (minutes >= 60) "%.1fh".format(minutes / 60.0) else "${minutes.toInt()}m"
     }
 
-    private fun rateLabel(pct: Int): String = if (pct < 0) "n/a" else "$pct%"
+    private fun rateLabel(pct: Int): String = if (pct < 0) tr("n/d", "n/a") else "$pct%"
 
     private fun durationLabel(sec: Int): String = "${sec / 60}:${(sec % 60).toString().padStart(2, '0')}"
 
-    private fun clockTime(ts: Long): String = SimpleDateFormat("h:mm a", Locale.US).format(Date(ts))
+    private fun clockTime(ts: Long): String = SimpleDateFormat("h:mm a", uiLocale()).format(Date(ts))
+
+    private fun uiLocale(): Locale = if (Lang.isEnglish) Locale.US else Locale("es", "419")
 
     private fun dayLabel(ts: Long): String {
         val now = Calendar.getInstance()
@@ -985,10 +987,11 @@ class HomeActivity : ComponentActivity() {
         fun ymd(c: Calendar) = c.get(Calendar.YEAR) * 1000 + c.get(Calendar.DAY_OF_YEAR)
         val diff = ymd(now) - ymd(then)
         return when {
-            diff == 0 -> "Today"
-            diff == 1 -> "Yesterday"
-            diff in 2..6 -> SimpleDateFormat("EEEE", Locale.US).format(Date(ts))
-            else -> SimpleDateFormat("EEEE · MMM d", Locale.US).format(Date(ts))
+            diff == 0 -> tr("Hoy", "Today")
+            diff == 1 -> tr("Ayer", "Yesterday")
+            diff in 2..6 -> SimpleDateFormat("EEEE", uiLocale()).format(Date(ts)).replaceFirstChar { it.uppercase() }
+            else -> SimpleDateFormat(if (Lang.isEnglish) "EEEE · MMM d" else "EEEE · d MMM", uiLocale()).format(Date(ts))
+                .replaceFirstChar { it.uppercase() }
         }
     }
 }

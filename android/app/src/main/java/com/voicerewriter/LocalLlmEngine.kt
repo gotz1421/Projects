@@ -35,7 +35,7 @@ object LocalLlmEngine {
     fun streamWithPrompt(context: Context, settings: Settings, prompt: String, text: String): Flow<String> = flow {
         val file = LlmModelManager.modelFile(context, settings.model)
         if (!file.exists()) {
-            throw IllegalStateException("On-device model not downloaded. Open Settings → On-device LLM → Download.")
+            throw IllegalStateException(tr("El modelo en el dispositivo no está descargado. Abre Ajustes → IA en el dispositivo → Descargar.", "On-device model not downloaded. Open Settings → On-device LLM → Download."))
         }
         val isFinetune = settings.model == LlmModelManager.FINETUNE_MODEL_ID
         val system: String
@@ -44,8 +44,18 @@ object LocalLlmEngine {
             // The fine-tune was trained on its own SYSTEM (with /no_think) + per-app tone,
             // and a bare transcript as the user turn. Feed exactly that — anything else
             // (the lean prompt, a DICTATION_PROMPT prefix) is off-distribution.
-            val category = AppContext.categoryFor(OpenWisprAccessibilityService.lastHostPackage, text).key
-            system = RewriteEngine.buildFinetuneSystemPrompt(category)
+            // Apps pinned to a tone in "Tone by app" win; a tone the user rewrote replaces the
+            // fine-tune's built-in one (a blank one means no tone line at all).
+            val tones = AppToneRepository(context)
+            val cat = AppContext.categoryFor(
+                OpenWisprAccessibilityService.lastHostPackage, text, tones.appAssignments(),
+            )
+            val custom = tones.customToneFor(cat)
+            system = when {
+                custom == null -> RewriteEngine.buildFinetuneSystemPrompt(cat.key)
+                custom.isBlank() -> RewriteEngine.buildFinetuneSystemPrompt("")
+                else -> RewriteEngine.buildFinetuneSystemPrompt("") + "\n" + custom
+            }
             user = text
         } else {
             // Lean prompt + marker-free user turn: tiny models loop on the full guardrails.

@@ -29,7 +29,7 @@ object LocalWhisperStt {
     suspend fun transcribe(context: Context, settings: Settings, samples: FloatArray, biasPrompt: String? = null): String {
         val id = settings.sttModel.ifBlank { WhisperModelManager.DEFAULT_MODEL }
         if (!WhisperModelManager.isReady(context, id)) {
-            throw IllegalStateException("On-device model not downloaded. Open Settings → Voice → Download model.")
+            throw IllegalStateException(tr("El modelo de voz no está descargado. Abre Ajustes → Voz → Descargar modelo.", "On-device model not downloaded. Open Settings → Voice → Download model."))
         }
         val seconds = samples.size / AudioRecorder.SAMPLE_RATE.toFloat()
         val t0 = System.nanoTime()

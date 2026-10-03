@@ -1,6 +1,12 @@
 <resources>
-    <string name="app_name">OpenWispr Alt</string>
+    <string name="app_name">VoiceFlow</string>
     <!-- Shown in the text-selection floating toolbar. Keep it short. -->
-    <string name="process_text_label">OpenWispr</string>
-    <string name="accessibility_description">Lets OpenWispr show the dictation bubble when you tap a text field, and type dictated and rewritten text directly into it.</string>
+    <string name="process_text_label">VoiceFlow</string>
+    <string name="accessibility_description">Permite que VoiceFlow muestre la burbuja de dictado cuando se abre el teclado y escriba el texto dictado directamente en el campo de texto.</string>
+    <string name="label_vocab">Diccionario personal</string>
+    <string name="label_learned">Palabras aprendidas</string>
+    <string name="label_style">Memoria de estilo</string>
+    <string name="label_contacts">Importar de contactos</string>
+    <string name="label_tone">Tono por app</string>
+    <string name="label_fix">Corregir una palabra</string>
 </resources>

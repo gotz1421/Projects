@@ -26,6 +26,12 @@ data class VocabEntry(
      * undo just the auto-learned ones — even when merged onto a manual/contact entry.
      */
     val learnedAliases: List<String> = emptyList(),
+    /**
+     * File names (in filesDir/vocab_voice) of recordings of the user saying this word. Each one
+     * was transcribed when recorded, and what the recognizer heard became an alias, so the
+     * recordings are what taught it; they're kept so the user can play them back.
+     */
+    val voiceSamples: List<String> = emptyList(),
 ) {
     val isSnippet: Boolean get() = !expansion.isNullOrBlank()
 

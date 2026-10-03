@@ -109,7 +109,7 @@ class AudioRecorder(private val context: Context) {
         )
         if (rec.state != AudioRecord.STATE_INITIALIZED) {
             rec.release()
-            throw IllegalStateException("Couldn't initialize the microphone.")
+            throw IllegalStateException(tr("No se pudo iniciar el micrófono.", "Couldn't initialize the microphone."))
         }
         record = rec
         recording = true

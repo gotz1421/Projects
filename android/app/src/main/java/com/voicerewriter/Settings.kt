@@ -18,17 +18,29 @@ import kotlinx.coroutines.flow.map
  * the model entirely (deterministic-only). The fine-tune ignores the level (it runs its
  * trained behavior); levels steer the cloud / generic on-device models.
  */
-enum class PolishLevel(val key: String, val label: String, val blurb: String, val instruction: String) {
-    OFF("off", "Off", "Deterministic cleanup only, no model. Fast and safe.", ""),
-    LIGHT("light", "Light", "Model fixes only capitalization, spacing and punctuation.",
+enum class PolishLevel(
+    val key: String,
+    private val labelEs: String, private val labelEn: String,
+    private val blurbEs: String, private val blurbEn: String,
+    val instruction: String,
+) {
+    OFF("off", "Apagado", "Off", "Solo limpieza básica, sin modelo. Rápido y seguro.",
+        "Deterministic cleanup only, no model. Fast and safe.", ""),
+    LIGHT("light", "Ligero", "Light", "El modelo solo corrige mayúsculas, espacios y puntuación.",
+        "Model fixes only capitalization, spacing and punctuation.",
         "Only fix capitalization, spacing and punctuation. Keep all words the same."),
-    MEDIUM("medium", "Medium", "Also splits run-on sentences and fixes small grammar.",
+    MEDIUM("medium", "Medio", "Medium", "También divide oraciones largas y corrige gramática menor.",
+        "Also splits run-on sentences and fixes small grammar.",
         "You may split run-on sentences and fix small grammar mistakes. " +
             "If the speaker corrects a previous word or number, keep only the corrected version."),
-    FULL("full", "Full", "Fuller cleanup, with one small rewrite for clarity if needed.",
+    FULL("full", "Completo", "Full", "Limpieza más completa, con una pequeña reescritura para mayor claridad si hace falta.",
+        "Fuller cleanup, with one small rewrite for clarity if needed.",
         "You may split run-on sentences and fix grammar, and use one small rewrite only if " +
             "needed for clarity. If the speaker corrects a previous word or number, keep only " +
             "the corrected version.");
+
+    val label: String get() = tr(labelEs, labelEn)
+    val blurb: String get() = tr(blurbEs, blurbEn)
 
     companion object {
         fun from(key: String?): PolishLevel = entries.firstOrNull { it.key == key } ?: FULL

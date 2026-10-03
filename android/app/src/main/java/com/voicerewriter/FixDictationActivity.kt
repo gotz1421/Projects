@@ -46,7 +46,7 @@ class FixDictationActivity : ComponentActivity() {
         val repo = VocabRepository(applicationContext)
         val text = LastDictation.get(applicationContext)
         setContent {
-            com.voicerewriter.ui.OpenWisprTheme {
+            com.voicerewriter.ui.VoiceFlowTheme {
                 Surface(color = MaterialTheme.colorScheme.background) { FixScreen(repo, text) }
             }
         }
@@ -61,14 +61,15 @@ class FixDictationActivity : ComponentActivity() {
         val words = remember(text) { Regex("[\\p{L}\\p{N}'’.@/-]+").findAll(text).map { it.value }.toList() }
 
         Column(modifier = Modifier.fillMaxWidth().systemBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Fix a word", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(tr("Corregir una palabra", "Fix a word"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             if (words.isEmpty()) {
-                Text("No recent dictation to fix.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = { finish() }) { Text("Close") }
+                Text(tr("No hay un dictado reciente para corregir.", "No recent dictation to fix."), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { finish() }) { Text(tr("Cerrar", "Close")) }
                 return@Column
             }
-            Text("Tap the word the recognizer got wrong, then type the correct spelling. " +
-                "We'll remember it for next time.",
+            Text(tr("Toca la palabra que se escribió mal y escribe cómo va. " +
+                "La recordaré para la próxima vez.", "Tap the word the recognizer got wrong, then type the correct spelling. " +
+                "We'll remember it for next time."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
@@ -77,18 +78,18 @@ class FixDictationActivity : ComponentActivity() {
                     AssistChip(onClick = { editing = w; correction = w }, label = { Text(w) })
                 }
             }
-            TextButton(onClick = { finish() }) { Text("Done") }
+            TextButton(onClick = { finish() }) { Text(tr("Listo", "Done")) }
         }
 
         val wrong = editing
         if (wrong != null) {
             AlertDialog(
                 onDismissRequest = { editing = null },
-                title = { Text("Correct \"$wrong\"") },
+                title = { Text(tr("Corregir «$wrong»", "Correct \"$wrong\"")) },
                 text = {
                     OutlinedTextField(
                         value = correction, onValueChange = { correction = it },
-                        label = { Text("Correct spelling") }, singleLine = true,
+                        label = { Text(tr("Cómo se escribe", "Correct spelling")) }, singleLine = true,
                     )
                 },
                 confirmButton = {
@@ -97,13 +98,13 @@ class FixDictationActivity : ComponentActivity() {
                         if (fixed.isNotEmpty() && !fixed.equals(wrong, ignoreCase = true)) {
                             scope.launch {
                                 learn(repo, wrong = wrong, right = fixed)
-                                Toast.makeText(this@FixDictationActivity, "Learned: $wrong → $fixed", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@FixDictationActivity, tr("Aprendido: $wrong → $fixed", "Learned: $wrong → $fixed"), Toast.LENGTH_SHORT).show()
                                 finish()
                             }
                         } else editing = null
-                    }) { Text("Save") }
+                    }) { Text(tr("Guardar", "Save")) }
                 },
-                dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
+                dismissButton = { TextButton(onClick = { editing = null }) { Text(tr("Cancelar", "Cancel")) } },
             )
         }
     }

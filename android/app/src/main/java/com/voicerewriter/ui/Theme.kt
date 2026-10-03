@@ -9,71 +9,80 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
- * OpenWispr brand theme — "muted sunset" (handoff identity): amber → coral → rose,
- * warm cream surfaces and plum ink. Centralized so every screen shares one identity.
+ * VoiceFlow brand theme: cyan → blue on deep navy, with a soft mint accent for waves and glow.
+ * Centralized so every screen (and the bubble) shares one identity.
+ *
+ * Palette (authoritative hex):
+ *  #22D3EE cyan (primary: buttons / accents)    #0EA5E9 blue (secondary: hover / states)
+ *  #0B1929 navy (dark surface / processing)     #A7F3D0 mint (waves / glow)
+ *  #E5E7EB light (secondary text / icons)       #111827 ink (primary text)
  */
 
 // ---- brand constants (also used for gradients / the bubble) ----
-val BrandAmber = Color(0xFFEDB079)
-val BrandCoral = Color(0xFFE07B52) // primary
-val BrandCoralDeep = Color(0xFFC7623C)
-val BrandRose = Color(0xFFC16560)
-val BrandPlum = Color(0xFF4A2E27)
-val MarkCream = Color(0xFFFCF8F4)
+val FlowCyan = Color(0xFF22D3EE)
+val FlowBlue = Color(0xFF0EA5E9) // primary on light surfaces
+val FlowBlueDeep = Color(0xFF0284C7)
+val FlowSky = Color(0xFF2563EB)  // deep end of the signature gradient
+val FlowNavy = Color(0xFF0B1929)
+val FlowMint = Color(0xFFA7F3D0)
+val FlowLight = Color(0xFFE5E7EB)
+val FlowInk = Color(0xFF111827)
+val FlowWhite = Color(0xFFFFFFFF)
 
-/** The signature muted-sunset gradient (≈140°): amber → coral → rose. */
-val SunsetBrush: Brush
-    get() = Brush.linearGradient(0f to BrandAmber, 0.52f to BrandCoral, 1f to BrandRose)
+/** The signature gradient (top-left → bottom-right): cyan → blue → deep blue. */
+val FlowBrush: Brush
+    get() = Brush.linearGradient(0f to FlowCyan, 0.55f to FlowBlue, 1f to FlowSky)
 
 private val LightColors = lightColorScheme(
-    primary = BrandCoral,
-    onPrimary = MarkCream,
-    primaryContainer = Color(0xFFF3E6D6),       // tint_panel
-    onPrimaryContainer = BrandPlum,
-    secondary = BrandRose,
-    onSecondary = MarkCream,
-    secondaryContainer = Color(0xFFF7E1DC),
-    onSecondaryContainer = Color(0xFF5A2520),
-    tertiary = BrandAmber,
-    onTertiary = BrandPlum,
-    background = Color(0xFFF6EFE6),             // cream_bg
-    onBackground = Color(0xFF4B3A2E),           // ink
-    surface = Color(0xFFFFFDFA),               // card
-    onSurface = Color(0xFF4B3A2E),
-    surfaceVariant = Color(0xFFF3E6D6),         // tint_panel
-    onSurfaceVariant = Color(0xFF7E6B5B),       // ink_soft
-    outline = Color(0xFFE7DECF),               // hairline
-    outlineVariant = Color(0xFFE7DECF),
+    primary = FlowBlue,
+    onPrimary = FlowWhite,
+    primaryContainer = Color(0xFFD5F6FC),
+    onPrimaryContainer = Color(0xFF053246),
+    secondary = FlowBlueDeep,
+    onSecondary = FlowWhite,
+    secondaryContainer = Color(0xFFDDF0FB),
+    onSecondaryContainer = Color(0xFF0B3550),
+    tertiary = Color(0xFF059669),
+    onTertiary = FlowWhite,
+    background = Color(0xFFF3F7FA),
+    onBackground = FlowInk,
+    surface = FlowWhite,
+    onSurface = FlowInk,
+    surfaceVariant = Color(0xFFE8F1F7),
+    onSurfaceVariant = Color(0xFF4B5563),
+    outline = Color(0xFFD7E0E8),
+    outlineVariant = Color(0xFFE5E7EB),
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFE68C66),               // lighter coral for contrast on plum
-    onPrimary = Color(0xFF3A1F17),
-    primaryContainer = Color(0xFF6B3A2A),
-    onPrimaryContainer = Color(0xFFF3E6D6),
-    secondary = BrandAmber,
-    onSecondary = Color(0xFF3A1F17),
-    secondaryContainer = Color(0xFF5A3A2A),
-    onSecondaryContainer = Color(0xFFF6EFE6),
-    tertiary = BrandAmber,
-    background = Color(0xFF2E1D18),
-    onBackground = Color(0xFFF6EFE6),
-    surface = Color(0xFF3A2620),
-    onSurface = Color(0xFFF6EFE6),
-    surfaceVariant = Color(0xFF4A352C),
-    onSurfaceVariant = Color(0xFFD8C4B4),
-    outline = Color(0xFF5C463B),
-    outlineVariant = Color(0xFF4A352C),
+    primary = FlowCyan,
+    onPrimary = FlowNavy,
+    primaryContainer = Color(0xFF0E4A63),
+    onPrimaryContainer = Color(0xFFD5F6FC),
+    secondary = FlowBlue,
+    onSecondary = FlowNavy,
+    secondaryContainer = Color(0xFF16324A),
+    onSecondaryContainer = FlowLight,
+    tertiary = FlowMint,
+    onTertiary = FlowNavy,
+    background = FlowNavy,
+    onBackground = FlowLight,
+    surface = Color(0xFF12263A),
+    onSurface = FlowLight,
+    surfaceVariant = Color(0xFF1A3249),
+    onSurfaceVariant = Color(0xFFA9B6C4),
+    outline = Color(0xFF26415A),
+    outlineVariant = Color(0xFF1A3249),
 )
 
 @Composable
-fun OpenWisprTheme(
+fun VoiceFlowTheme(
     dark: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
-        typography = OpenWisprTypography,
+        typography = VoiceFlowTypography,
         content = content,
     )
 }

@@ -33,7 +33,7 @@ object Feedback {
             "unknown"
         }
         return buildString {
-            append("App: OpenWispr ").append(version).append('\n')
+            append("App: VoiceFlow (OpenWispr fork) ").append(version).append('\n')
             append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
             append("Android: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(')')
         }
@@ -47,7 +47,7 @@ object Feedback {
     fun emailIntent(context: Context): Intent {
         val body = "\n\n---\n" + diagnostics(context) + "\n"
         val uri = "mailto:$EMAIL" +
-            "?subject=" + enc("OpenWispr feedback") +
+            "?subject=" + enc("VoiceFlow (OpenWispr fork) feedback") +
             "&body=" + enc(body)
         return Intent(Intent.ACTION_SENDTO, Uri.parse(uri))
     }

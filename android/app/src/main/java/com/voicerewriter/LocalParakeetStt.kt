@@ -113,7 +113,7 @@ object LocalParakeetStt {
     /** Transcribe [samples] (16 kHz mono, normalized -1..1). [biasPrompt] is the shared vocab glossary (see class note). */
     suspend fun transcribe(context: Context, settings: Settings, samples: FloatArray, biasPrompt: String? = null): String {
         if (!ParakeetModelManager.isReady(context)) {
-            throw IllegalStateException("Parakeet model not downloaded. Open Settings → Voice → Download model.")
+            throw IllegalStateException(tr("El modelo Parakeet no está descargado. Abre Ajustes → Voz → Descargar modelo.", "Parakeet model not downloaded. Open Settings → Voice → Download model."))
         }
         val terms = if (settings.parakeetHotwordsExperimental) hotwordsFromBiasPrompt(biasPrompt) else emptyList()
         val hotwords = writeHotwordsFile(context, terms)

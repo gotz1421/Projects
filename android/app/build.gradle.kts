@@ -9,9 +9,9 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // ".alt" so this fork installs next to the Play Store OpenWispr instead of colliding
-        // with it (same id + different signature = install refused).
-        applicationId = "com.voicerewriter.alt"
+        // VoiceFlow: its own id so it installs next to OpenWispr (and the earlier "OpenWispr Alt"
+        // build) instead of colliding with them (same id + different signature = install refused).
+        applicationId = "com.voiceflow.app"
         minSdk = 24
         // Play requires targetSdk 36 for every update from 31 Aug 2026. See the API 36
         // behaviour changes handled in this migration (edge-to-edge, predictive back,
@@ -20,7 +20,7 @@ android {
         versionCode = 8
         // Kept in step with the git tag and macOS MARKETING_VERSION from 1.1.0 on; before this
         // release the three drifted apart (Android 1.0.1 / tag v0.2.1 / macOS 0.2.1).
-        versionName = "1.4.0"
+        versionName = "1.4.0-voiceflow.1"
         ndk {
             // Device is arm64; the whisper/llm/mlc4j native libs and the sherpa-onnx AAR
             // all ship arm64-v8a. Restricting here keeps the APK from bundling unused ABIs

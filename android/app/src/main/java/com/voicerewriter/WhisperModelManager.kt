@@ -23,18 +23,21 @@ object WhisperModelManager {
 
     data class WhisperModel(
         val id: String,
-        val label: String,
+        private val labelEs: String,
+        private val labelEn: String,
         val fileName: String,
         val url: String,
         val sizeLabel: String,
-    )
+    ) {
+        val label: String get() = tr(labelEs, labelEn)
+    }
 
     private fun hf(file: String) = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$file"
 
     val MODELS = listOf(
-        WhisperModel("tiny", "Tiny (fastest)", "ggml-tiny.bin", hf("ggml-tiny.bin"), "~75MB"),
-        WhisperModel("base", "Base (balanced)", "ggml-base.bin", hf("ggml-base.bin"), "~142MB"),
-        WhisperModel("small", "Small (most accurate)", "ggml-small.bin", hf("ggml-small.bin"), "~488MB"),
+        WhisperModel("tiny", "Tiny (el más rápido)", "Tiny (fastest)", "ggml-tiny.bin", hf("ggml-tiny.bin"), "~75MB"),
+        WhisperModel("base", "Base (equilibrado)", "Base (balanced)", "ggml-base.bin", hf("ggml-base.bin"), "~142MB"),
+        WhisperModel("small", "Small (el más preciso)", "Small (most accurate)", "ggml-small.bin", hf("ggml-small.bin"), "~488MB"),
     )
 
     const val DEFAULT_MODEL = "tiny"

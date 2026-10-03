@@ -46,7 +46,7 @@ class StyleMemoryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            com.voicerewriter.ui.OpenWisprTheme {
+            com.voicerewriter.ui.VoiceFlowTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     StyleMemoryScreen()
                 }
@@ -67,10 +67,10 @@ class StyleMemoryActivity : ComponentActivity() {
         runCatching {
             val share = Intent(Intent.ACTION_SEND).apply {
                 type = "application/jsonl"
-                putExtra(Intent.EXTRA_SUBJECT, "OpenWispr fine-tune data ($count samples)")
+                putExtra(Intent.EXTRA_SUBJECT, "VoiceFlow fine-tune data ($count samples)")
                 putExtra(Intent.EXTRA_TEXT, jsonl)
             }
-            startActivity(Intent.createChooser(share, "Export style memory"))
+            startActivity(Intent.createChooser(share, tr("Exportar memoria de estilo", "Export style memory")))
         }
         return count
     }
@@ -90,11 +90,14 @@ class StyleMemoryActivity : ComponentActivity() {
         val edited = samples.count { it.edited && it.cleaned != it.final }
 
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Style memory", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(tr("Memoria de estilo", "Style memory"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(
-                "Accepted dictations OpenWispr keeps on-device to learn your style. The ones you " +
+                tr("Dictados que VoiceFlow guarda en tu teléfono para aprender tu estilo. Los que " +
+                    "corregiste ($edited) le enseñan al modelo cómo te gusta el texto y se pueden exportar " +
+                    "para entrenar un mejor modelo después. Nada sale de tu teléfono a menos que lo exportes.",
+                    "Dictations VoiceFlow keeps on-device to learn your style. The ones you " +
                     "corrected ($edited) teach the model how you like text cleaned, and can be exported " +
-                    "to train a better model later. Nothing here leaves your phone unless you export it.",
+                    "to train a better model later. Nothing here leaves your phone unless you export it."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -103,29 +106,29 @@ class StyleMemoryActivity : ComponentActivity() {
                 FilledTonalButton(onClick = {
                     val n = export()
                     Toast.makeText(this@StyleMemoryActivity,
-                        if (n == 0) "No corrections to export yet" else "Exported $n corrected samples",
+                        if (n == 0) tr("Todavía no hay correcciones para exportar", "No corrections to export yet") else tr("Se exportaron $n muestras corregidas", "Exported $n corrected samples"),
                         Toast.LENGTH_SHORT).show()
-                }) { Text("Export") }
+                }) { Text(tr("Exportar", "Export")) }
                 OutlinedButton(onClick = {
                     scope.launch {
                         withContext(Dispatchers.IO) { CorrectionCorpus.clear(applicationContext) }
                         reload()
-                        Toast.makeText(this@StyleMemoryActivity, "Style memory cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@StyleMemoryActivity, tr("Memoria de estilo borrada", "Style memory cleared"), Toast.LENGTH_SHORT).show()
                     }
-                }) { Text("Clear all") }
+                }) { Text(tr("Borrar todo", "Clear all")) }
             }
 
             Divider()
 
             if (loaded && samples.isEmpty()) {
-                Text("Nothing yet. Your accepted dictations will appear here.",
+                Text(tr("Nada todavía. Aquí aparecerán tus dictados.", "Nothing yet. Your dictations will appear here."),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(samples, key = { it.ts.toString() + it.final.hashCode() }) { s ->
                         Column(Modifier.fillMaxWidth()) {
                             Text(
-                                (if (s.edited && s.cleaned != s.final) "CORRECTED · " else "KEPT · ") + s.category.uppercase(),
+                                (if (s.edited && s.cleaned != s.final) tr("CORREGIDO · ", "CORRECTED · ") else tr("SIN CAMBIOS · ", "KEPT · ")) + s.category.uppercase(),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold,
                             )

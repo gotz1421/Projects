@@ -3,25 +3,27 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Cream Aperture mark, centered in the adaptive safe zone. Doubles as the monochrome layer. -->
+    <!-- White VoiceFlow microphone, centered in the adaptive safe zone. Doubles as the monochrome layer. -->
     <group
-        android:scaleX="0.82"
-        android:scaleY="0.82"
-        android:translateX="7"
-        android:translateY="13">
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        android:translateX="24"
+        android:translateY="24">
         <path
-            android:strokeColor="#FCF8F4"
+            android:fillColor="#FFFFFF"
+            android:pathData="M50,14 C57.7,14 62,18.5 62,26 L62,48 C62,55.5 57.7,60 50,60 C42.3,60 38,55.5 38,48 L38,26 C38,18.5 42.3,14 50,14 Z" />
+        <path
+            android:strokeColor="#FFFFFF"
             android:strokeWidth="7"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"
             android:fillColor="@android:color/transparent"
-            android:pathData="M67,29 A25,25 0 1 0 67,71" />
+            android:pathData="M27,47 C27,61 37,71 50,71 C63,71 73,61 73,47" />
         <path
-            android:strokeColor="#FCF8F4"
+            android:strokeColor="#FFFFFF"
             android:strokeWidth="7"
             android:strokeLineCap="round"
-            android:strokeLineJoin="round"
             android:fillColor="@android:color/transparent"
-            android:pathData="M69,50 C75,44 79,56 86,49" />
+            android:pathData="M50,71 L50,85" />
     </group>
 </vector>

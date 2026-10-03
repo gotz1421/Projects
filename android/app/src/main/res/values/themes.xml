@@ -1,8 +1,8 @@
 <resources>
-    <style name="Theme.OpenWispr" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.VoiceFlow" parent="Theme.Material3.DayNight.NoActionBar" />
 
     <!-- Used by RewriteActivity / FixDictationActivity so they float over the host app. -->
-    <style name="Theme.OpenWispr.Translucent" parent="Theme.OpenWispr">
+    <style name="Theme.VoiceFlow.Translucent" parent="Theme.VoiceFlow">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
@@ -11,8 +11,15 @@
         <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
     </style>
 
+    <!-- Dictation: fully see-through, no dimming. The only UI is a small status pill, so the
+         app being typed into stays visible underneath. -->
+    <style name="Theme.VoiceFlow.Overlay" parent="Theme.VoiceFlow.Translucent">
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <!-- Branded launch screen for the main activity (legacy fallback for API < 31). -->
-    <style name="Theme.OpenWispr.Splash" parent="Theme.OpenWispr">
+    <style name="Theme.VoiceFlow.Splash" parent="Theme.VoiceFlow">
         <item name="android:windowBackground">@drawable/splash_window</item>
     </style>
 </resources>

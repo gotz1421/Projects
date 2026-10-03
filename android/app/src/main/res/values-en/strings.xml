@@ -1,0 +1,9 @@
+<resources>
+    <string name="accessibility_description">Lets VoiceFlow show the dictation bubble when the keyboard opens, and type dictated text directly into the text field.</string>
+    <string name="label_vocab">Personal dictionary</string>
+    <string name="label_learned">Learned words</string>
+    <string name="label_style">Style memory</string>
+    <string name="label_contacts">Import from contacts</string>
+    <string name="label_tone">Tone by app</string>
+    <string name="label_fix">Fix a word</string>
+</resources>

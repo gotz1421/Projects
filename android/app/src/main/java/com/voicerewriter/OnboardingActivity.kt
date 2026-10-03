@@ -65,8 +65,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.voicerewriter.ui.MonoEyebrow
-import com.voicerewriter.ui.OpenWisprTheme
-import com.voicerewriter.ui.SunsetBrush
+import com.voicerewriter.ui.VoiceFlowTheme
+import com.voicerewriter.ui.FlowBrush
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -98,7 +98,7 @@ class OnboardingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent { OpenWisprTheme { OnboardingScreen(::launchDictation, ::goHome) } }
+        setContent { VoiceFlowTheme { OnboardingScreen(::launchDictation, ::goHome) } }
     }
 
     private fun launchDictation() {
@@ -132,12 +132,16 @@ class OnboardingActivity : ComponentActivity() {
 // lists cannot currently be demoed together: a multi-word correction inside a list drops the
 // text before it (see PolishHighlightsTest). Until that's fixed, corrections stay in the
 // also-handles line rather than the script.
-private const val TRY_IT_SCRIPT =
-    "um first email john, second book the room at two thirty, third send the deck period"
+private val TRY_IT_SCRIPT: String
+    get() = tr(
+        "eh hola equipo, mañana a las tres y media revisamos la presentación, ehm y luego mando el resumen",
+        "um first email john, second book the room at two thirty, third send the deck period",
+    )
 
 // Apps named on the welcome screen. Concrete names beat "works anywhere" — but we name them
 // as text rather than drawing real icons, which would need <queries> manifest entries.
-private const val WELCOME_APPS = "WhatsApp · Gmail · Slack · Notes · anywhere you type"
+private val WELCOME_APPS: String
+    get() = tr("WhatsApp · Gmail · Slack · Notas · donde sea que escribas", "WhatsApp · Gmail · Slack · Notes · anywhere you type")
 
 private const val LAST_STEP = 5
 
@@ -318,7 +322,7 @@ private fun OnboardingScreen(onLaunchDictation: () -> Unit, onGoHome: () -> Unit
                 val speechDownloading = dl == "downloading"
                 DownloadStatusChip(
                     pct = if (speechDownloading) dlPct else llmPct,
-                    label = if (speechDownloading) "Speech model" else "Polish model",
+                    label = if (speechDownloading) tr("Modelo de voz", "Speech model") else tr("Modelo de pulido", "Polish model"),
                 )
             }
 
@@ -403,7 +407,7 @@ private fun TopBar(progress: Float, onBack: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
-            Icons.Filled.ChevronLeft, contentDescription = "Back",
+            Icons.Filled.ChevronLeft, contentDescription = tr("Atrás", "Back"),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(30.dp).clip(CircleShape).clickable { onBack() }.padding(3.dp),
         )
@@ -455,12 +459,12 @@ private fun Eyebrow(text: String) {
 @Composable
 private fun LogoCircle(diameter: Int) {
     Box(
-        Modifier.size(diameter.dp).clip(CircleShape).background(SunsetBrush),
+        Modifier.size(diameter.dp).clip(CircleShape).background(FlowBrush),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            androidx.compose.ui.res.painterResource(R.drawable.ic_aperture), null,
-            tint = com.voicerewriter.ui.MarkCream, modifier = Modifier.size((diameter * 0.5f).dp),
+            androidx.compose.ui.res.painterResource(R.drawable.ic_voiceflow), null,
+            tint = com.voicerewriter.ui.FlowWhite, modifier = Modifier.size((diameter * 0.5f).dp),
         )
     }
 }
@@ -476,7 +480,7 @@ private fun DownloadStatusChip(pct: Float, label: String) {
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(cs.primary))
         Text(
-            "$label arriving · ${(pct * 100).toInt()}% · keep going",
+            tr("$label en camino · ${(pct * 100).toInt()}% · sigue adelante", "$label arriving · ${(pct * 100).toInt()}% · keep going"),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
         )
     }
@@ -484,10 +488,10 @@ private fun DownloadStatusChip(pct: Float, label: String) {
 
 @Composable
 private fun SuccessPill(text: String) {
-    val green = Color(0xFF3E8E5A)
+    val green = Color(0xFF047857)
     Row(
         Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFFE7F3EA))
-            .border(1.dp, Color(0xFFBFE0C9), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+            .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(Icons.Filled.Check, null, tint = green, modifier = Modifier.size(16.dp))
@@ -528,12 +532,12 @@ private fun WelcomeStep(onNext: () -> Unit) {
             LogoCircle(118)
             Spacer(Modifier.height(30.dp))
             Text(
-                "Talk anywhere.\nKeep everything.", style = MaterialTheme.typography.displaySmall,
+                tr("Habla donde sea.\nEscribe sin teclear.", "Talk anywhere.\nKeep everything."), style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.ExtraBold, color = cs.onBackground, textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                "OpenWispr turns your voice into clean, finished text, right on your phone. Setup takes a minute.",
+                tr("VoiceFlow convierte tu voz en texto limpio y listo, directo en tu teléfono. Configurarlo toma un minuto.", "VoiceFlow turns your voice into clean, finished text, right on your phone. Setup takes a minute."),
                 style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(18.dp))
@@ -543,9 +547,9 @@ private fun WelcomeStep(onNext: () -> Unit) {
                 textAlign = TextAlign.Center,
             )
         }
-        Cta("Get started", onClick = onNext)
+        Cta(tr("Comenzar", "Get started"), onClick = onNext)
         Spacer(Modifier.height(18.dp))
-        Eyebrow("100% on-device · open source")
+        Eyebrow(tr("100% en tu teléfono · código abierto", "100% on-device · open source"))
     }
 }
 
@@ -575,19 +579,19 @@ private fun PrivacyStep(
             Spacer(Modifier.height(4.dp))
             IconTile(Icons.Filled.VerifiedUser, size = 56, corner = 16, iconSize = 27)
             Spacer(Modifier.height(16.dp))
-            Text("Your voice never leaves this phone", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
+            Text(tr("Tu voz nunca sale de este teléfono", "Your voice never leaves this phone"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
             Spacer(Modifier.height(10.dp))
             Text(
-                "Other dictation apps send your voice to a server. OpenWispr doesn't, so it sets itself up here. Takes about a minute.",
+                tr("Otras apps de dictado mandan tu voz a un servidor. VoiceFlow no, por eso se prepara aquí. Toma como un minuto.", "Other dictation apps send your voice to a server. VoiceFlow doesn't, so it sets itself up here. Takes about a minute."),
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
             )
             Spacer(Modifier.height(20.dp))
 
-            ModelCard(icon = Icons.Filled.Mic, name = "Setting up", state = dl, pct = dlPct)
+            ModelCard(icon = Icons.Filled.Mic, name = tr("Preparando", "Setting up"), state = dl, pct = dlPct)
 
             if (dl == "error") {
                 Spacer(Modifier.height(16.dp))
-                Text(dlError ?: "Download failed", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB4502E))
+                Text(dlError ?: tr("Falló la descarga", "Download failed"), style = MaterialTheme.typography.bodySmall, color = Color(0xFFDC2626))
             }
             if (fitNote != null) {
                 Spacer(Modifier.height(16.dp))
@@ -600,16 +604,16 @@ private fun PrivacyStep(
             Spacer(Modifier.height(20.dp))
             // Concrete and testable by the user later, which is what makes it land as proof
             // rather than as marketing. A cloud app cannot make this claim.
-            Eyebrow("Works offline · no account · nothing uploaded")
+            Eyebrow(tr("Sin internet · sin cuenta · nada se sube", "Works offline · no account · nothing uploaded"))
         },
         actions = {
             // The button always just moves on. Making someone sit and watch a ~1GB download
             // reads as stuck, not as progress, and it was the single biggest place onboarding
             // lost people; the download keeps running regardless of where they are.
             when {
-                dl == "error" -> Cta("Try again", onClick = onRetry)
-                dl == "done" -> Cta("Continue", onClick = onNext)
-                else -> Cta("Continue while it sets up", onClick = onNext)
+                dl == "error" -> Cta(tr("Intentar de nuevo", "Try again"), onClick = onRetry)
+                dl == "done" -> Cta(tr("Continuar", "Continue"), onClick = onNext)
+                else -> Cta(tr("Continuar mientras se prepara", "Continue while it sets up"), onClick = onNext)
             }
         },
     )
@@ -621,12 +625,12 @@ private fun ModelCard(icon: ImageVector, name: String, state: String, pct: Float
     val cs = MaterialTheme.colorScheme
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(cs.secondaryContainer)
-            .border(1.5.dp, if (state == "done") Color(0xFFBFE0C9) else cs.primary, RoundedCornerShape(15.dp))
+            .border(1.5.dp, if (state == "done") Color(0xFFA7F3D0) else cs.primary, RoundedCornerShape(15.dp))
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(SunsetBrush), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = com.voicerewriter.ui.MarkCream, modifier = Modifier.size(20.dp))
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(FlowBrush), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = com.voicerewriter.ui.FlowWhite, modifier = Modifier.size(20.dp))
             }
             Text(
                 name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
@@ -634,13 +638,13 @@ private fun ModelCard(icon: ImageVector, name: String, state: String, pct: Float
             )
             Text(
                 when (state) {
-                    "done" -> "READY"
+                    "done" -> tr("LISTO", "READY")
                     "downloading" -> "${(pct * 100).toInt()}%"
-                    "error" -> "FAILED"
-                    else -> "STARTING"
+                    "error" -> tr("FALLÓ", "FAILED")
+                    else -> tr("INICIANDO", "STARTING")
                 },
                 style = MonoEyebrow, fontSize = 9.5.sp,
-                color = if (state == "done") Color(0xFF3E8E5A) else cs.onSurfaceVariant,
+                color = if (state == "done") Color(0xFF047857) else cs.onSurfaceVariant,
             )
         }
         if (state == "downloading") {
@@ -660,30 +664,30 @@ private fun MicStep(granted: Boolean, blocked: Boolean, onAllow: () -> Unit, onS
             Spacer(Modifier.height(20.dp))
             IconTile(Icons.Filled.Mic)
             Spacer(Modifier.height(24.dp))
-            Text("Let OpenWispr hear you", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
+            Text(tr("Deja que VoiceFlow te escuche", "Let VoiceFlow hear you"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
             Spacer(Modifier.height(12.dp))
             Text(
-                "This is the one thing it genuinely can't work without. Your audio is turned into text by the model you just downloaded. Never saved to a file, never uploaded.",
+                tr("Es lo único sin lo que de verdad no puede funcionar. Tu audio se convierte en texto con el modelo que acabas de descargar. Nunca se sube a ningún lado.", "This is the one thing it genuinely can't work without. Your audio is turned into text by the model you just downloaded. Never uploaded."),
                 style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
             )
             Spacer(Modifier.height(24.dp))
             when {
-                granted -> SuccessPill("Microphone allowed")
+                granted -> SuccessPill(tr("Micrófono permitido", "Microphone allowed"))
                 blocked -> Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFFFBEAE2))
                         .border(1.dp, Color(0xFFE9C3B2), RoundedCornerShape(12.dp)).padding(14.dp),
                 ) {
-                    Text("Microphone is blocked", style = MaterialTheme.typography.titleSmall, color = Color(0xFFB4502E))
+                    Text(tr("El micrófono está bloqueado", "Microphone is blocked"), style = MaterialTheme.typography.titleSmall, color = Color(0xFFDC2626))
                     Spacer(Modifier.height(4.dp))
-                    Text("Android won't ask again. Open App info → Permissions → Microphone and switch it on.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text(tr("Android no volverá a preguntar. Abre Info de la app → Permisos → Micrófono y actívalo.", "Android won't ask again. Open App info → Permissions → Microphone and switch it on."), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
         },
         actions = {
             when {
-                granted -> Cta("Continue", onClick = onNext)
-                blocked -> Cta("Open settings", onClick = onAllow)
-                else -> { Cta("Allow microphone", onClick = onAllow); SubLink("Set up later", onClick = onSkip) }
+                granted -> Cta(tr("Continuar", "Continue"), onClick = onNext)
+                blocked -> Cta(tr("Abrir ajustes", "Open settings"), onClick = onAllow)
+                else -> { Cta(tr("Permitir micrófono", "Allow microphone"), onClick = onAllow); SubLink(tr("Configurar después", "Set up later"), onClick = onSkip) }
             }
         },
     )
@@ -701,19 +705,19 @@ private fun A11yStep(
             content = {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(74.dp).clip(CircleShape).background(Color(0xFFE7F3EA)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Check, null, tint = Color(0xFF3E8E5A), modifier = Modifier.size(36.dp))
+                        Icon(Icons.Filled.Check, null, tint = Color(0xFF047857), modifier = Modifier.size(36.dp))
                     }
                     Spacer(Modifier.height(22.dp))
-                    Text("Auto-insert is on", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
+                    Text(tr("La inserción automática está activa", "Auto-insert is on"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
                     Spacer(Modifier.height(10.dp))
-                    Text("Your text will drop straight into whatever you're typing in.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+                    Text(tr("Tu texto aparecerá directo en donde estés escribiendo.", "Your text will drop straight into whatever you're typing in."), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
                     if (!overlayGranted) {
                         Spacer(Modifier.height(22.dp))
                         BubblePermissionRow(onAllow = onGrantOverlay)
                     }
                 }
             },
-            actions = { Cta("Continue", onClick = onNext) },
+            actions = { Cta(tr("Continuar", "Continue"), onClick = onNext) },
         )
         "skipped" -> StepScaffold(
             content = {
@@ -722,16 +726,16 @@ private fun A11yStep(
                         Icon(Icons.Filled.ContentPaste, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(32.dp))
                     }
                     Spacer(Modifier.height(22.dp))
-                    Text("No problem, clipboard it is", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center)
+                    Text(tr("Sin problema, usaremos el portapapeles", "No problem, clipboard it is"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(10.dp))
-                    Text("Without auto-insert, OpenWispr copies your finished text so you can paste it yourself. You can enable auto-insert anytime in Settings.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+                    Text(tr("Sin la inserción automática, VoiceFlow copia tu texto para que lo pegues tú. Puedes activarla cuando quieras en Ajustes.", "Without auto-insert, VoiceFlow copies your finished text so you can paste it yourself. You can enable auto-insert anytime in Settings."), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
                     if (!overlayGranted) {
                         Spacer(Modifier.height(22.dp))
                         BubblePermissionRow(onAllow = onGrantOverlay)
                     }
                 }
             },
-            actions = { Cta("Continue", onClick = onNext) },
+            actions = { Cta(tr("Continuar", "Continue"), onClick = onNext) },
         )
         // Kept deliberately sparse. This is the scariest screen in the flow, and the instinct
         // is to reassure with more words, which backfires: a wall of text about a permission
@@ -742,18 +746,18 @@ private fun A11yStep(
                 Spacer(Modifier.height(16.dp))
                 IconTile(Icons.Filled.TouchApp, size = 56, corner = 16, iconSize = 27)
                 Spacer(Modifier.height(16.dp))
-                Text("Let it type for you", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
+                Text(tr("Deja que escriba por ti", "Let it type for you"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "It only inserts your text. It never reads your screen.",
+                    tr("Solo inserta tu texto y detecta cuándo se abre el teclado.", "It only inserts your text and notices when the keyboard opens."),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                 )
 
                 Spacer(Modifier.height(26.dp))
-                MockSettingsRow(label = "OpenWispr", subtitle = "Downloaded app", on = true)
+                MockSettingsRow(label = "VoiceFlow", subtitle = tr("App descargada", "Downloaded app"), on = true)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Find this switch and turn it on.",
+                    tr("Busca este interruptor y actívalo.", "Find this switch and turn it on."),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onBackground,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
@@ -761,7 +765,7 @@ private fun A11yStep(
                 // The system confirmation is where people bail: it's worded to sound alarming
                 // and gives no hint that every accessibility app triggers the identical dialog.
                 Text(
-                    "Android will ask you to confirm. That's normal.",
+                    tr("Android te pedirá confirmar. Es normal.", "Android will ask you to confirm. That's normal."),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
@@ -772,11 +776,11 @@ private fun A11yStep(
                 }
             },
             actions = {
-                Cta("Open Accessibility settings", onClick = onOpenA11y)
+                Cta(tr("Abrir ajustes de Accesibilidad", "Open Accessibility settings"), onClick = onOpenA11y)
                 // The parent's ON_RESUME observer normally detects the grant on its own, so
                 // this manual fallback only earns its place once they've actually been out.
-                if (canConfirmManually) SubLink("I've already turned it on", onClick = onConfirm)
-                SubLink("Skip, I'll paste manually", onClick = onSkip)
+                if (canConfirmManually) SubLink(tr("Ya lo activé", "I've already turned it on"), onClick = onConfirm)
+                SubLink(tr("Omitir, pegaré a mano", "Skip, I'll paste manually"), onClick = onSkip)
             },
         )
     }
@@ -798,10 +802,10 @@ private fun MockSettingsRow(label: String, subtitle: String, on: Boolean) {
             .border(1.5.dp, cs.primary, RoundedCornerShape(12.dp)).padding(13.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(SunsetBrush), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(FlowBrush), contentAlignment = Alignment.Center) {
             Icon(
-                androidx.compose.ui.res.painterResource(R.drawable.ic_aperture), null,
-                tint = com.voicerewriter.ui.MarkCream, modifier = Modifier.size(16.dp),
+                androidx.compose.ui.res.painterResource(R.drawable.ic_voiceflow), null,
+                tint = com.voicerewriter.ui.FlowWhite, modifier = Modifier.size(16.dp),
             )
         }
         Column(Modifier.weight(1f)) {
@@ -814,7 +818,7 @@ private fun MockSettingsRow(label: String, subtitle: String, on: Boolean) {
                 .background(if (on) cs.primary else cs.outline),
             contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
-            Box(Modifier.padding(horizontal = 3.dp).size(17.dp).clip(CircleShape).background(com.voicerewriter.ui.MarkCream))
+            Box(Modifier.padding(horizontal = 3.dp).size(17.dp).clip(CircleShape).background(com.voicerewriter.ui.FlowWhite))
         }
     }
 }
@@ -832,12 +836,12 @@ private fun BubblePermissionRow(onAllow: () -> Unit) {
             Icon(Icons.Filled.TouchApp, null, tint = cs.primary, modifier = Modifier.size(19.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("Show the tap-to-talk bubble", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+            Text(tr("Mostrar la burbuja para dictar", "Show the tap-to-talk bubble"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
             // Pre-empts the usual floating-overlay objection: people assume it parks itself
             // on screen forever.
-            Text("Appears when there's a text field to type into, and goes away when you're done.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(tr("Aparece cada vez que se abre el teclado y se va cuando terminas.", "Appears whenever the keyboard opens, and goes away when you're done."), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
-        Text("Allow", style = MaterialTheme.typography.titleSmall, color = cs.primary, modifier = Modifier.clickable { onAllow() })
+        Text(tr("Permitir", "Allow"), style = MaterialTheme.typography.titleSmall, color = cs.primary, modifier = Modifier.clickable { onAllow() })
     }
 }
 /** Outlined coral call-to-action chip with a chevron — the not-yet-set-up state. */
@@ -871,10 +875,10 @@ private fun TryItStep(
         content = {
             Spacer(Modifier.height(8.dp))
             if (result == null) {
-                Text("Try it once", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(tr("Pruébalo una vez", "Try it once"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Tap the circle and read this aloud, mistakes and all. The filler and the mid-sentence correction are the point.",
+                    tr("Toca el círculo y lee esto en voz alta, con todo y titubeos. Las muletillas son justo la idea.", "Tap the circle and read this aloud, mistakes and all. The filler and the mid-sentence correction are the point."),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
@@ -885,11 +889,11 @@ private fun TryItStep(
                 Spacer(Modifier.height(28.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Box(
-                        Modifier.size(96.dp).clip(CircleShape).background(SunsetBrush)
+                        Modifier.size(96.dp).clip(CircleShape).background(FlowBrush)
                             .clickable(enabled = modelReady && micGranted) { onTry() },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_aperture), null, tint = com.voicerewriter.ui.MarkCream, modifier = Modifier.size(48.dp))
+                        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_voiceflow), null, tint = com.voicerewriter.ui.FlowWhite, modifier = Modifier.size(48.dp))
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -897,16 +901,16 @@ private fun TryItStep(
                     when {
                         // The wait framed as an arrival with a number on it, never a dead end —
                         // and Continue below stays live throughout.
-                        !modelReady -> Eyebrow("Speech model ${(dlPct * 100).toInt()}% · almost there")
-                        !micGranted -> Eyebrow("Needs the microphone · go back a step")
-                        else -> Eyebrow("Tap to talk")
+                        !modelReady -> Eyebrow(tr("Modelo de voz ${(dlPct * 100).toInt()}% · ya casi", "Speech model ${(dlPct * 100).toInt()}% · almost there"))
+                        !micGranted -> Eyebrow(tr("Necesita el micrófono · regresa un paso", "Needs the microphone · go back a step"))
+                        else -> Eyebrow(tr("Toca para hablar", "Tap to talk"))
                     }
                 }
             } else {
-                Text("That was all on your phone.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(tr("Todo eso pasó en tu teléfono.", "That was all on your phone."), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "No account, no upload, no server. Here's what you just said:",
+                    tr("Sin cuenta, sin subir nada, sin servidor. Esto es lo que dijiste:", "No account, no upload, no server. Here's what you just said:"),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
@@ -918,7 +922,7 @@ private fun TryItStep(
                     // Only when cleanup actually changed something — otherwise the "before"
                     // is just the answer twice, which undersells rather than demonstrates.
                     if (raw != null) {
-                        Eyebrow("You said")
+                        Eyebrow(tr("Dijiste", "You said"))
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "“$raw”", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
@@ -926,11 +930,11 @@ private fun TryItStep(
                         )
                         Row(Modifier.fillMaxWidth().padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                             Box(Modifier.weight(1f).height(1.dp).background(cs.outline))
-                            Text("CLEANED UP", style = MonoEyebrow, fontSize = 10.sp, color = cs.primary)
+                            Text(tr("LIMPIO", "CLEANED UP"), style = MonoEyebrow, fontSize = 10.sp, color = cs.primary)
                             Box(Modifier.weight(1f).height(1.dp).background(cs.outline))
                         }
                     }
-                    Eyebrow("OpenWispr wrote")
+                    Eyebrow(tr("VoiceFlow escribió", "VoiceFlow wrote"))
                     Spacer(Modifier.height(9.dp))
                     Text(result, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 }
@@ -945,7 +949,7 @@ private fun TryItStep(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(9.dp),
                         ) {
-                            Icon(Icons.Filled.Check, null, tint = Color(0xFF3E8E5A), modifier = Modifier.size(15.dp))
+                            Icon(Icons.Filled.Check, null, tint = Color(0xFF047857), modifier = Modifier.size(15.dp))
                             Text(label, style = MaterialTheme.typography.bodyMedium, color = cs.onBackground)
                         }
                     }
@@ -956,13 +960,13 @@ private fun TryItStep(
                 }
                 if (did.isEmpty() && also == null) {
                     Spacer(Modifier.height(18.dp))
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { SuccessPill("Nice, that worked") }
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { SuccessPill(tr("¡Listo, funcionó!", "Nice, that worked")) }
                 }
             }
         },
         actions = {
-            if (result == null) Cta("Skip for now", onClick = onNext)
-            else Cta("Continue", onClick = onNext)
+            if (result == null) Cta(tr("Omitir por ahora", "Skip for now"), onClick = onNext)
+            else Cta(tr("Continuar", "Continue"), onClick = onNext)
         },
     )
 }
@@ -979,16 +983,16 @@ private fun DoneStep(
             Spacer(Modifier.height(8.dp))
             LogoCircle(100)
             Spacer(Modifier.height(24.dp))
-            Text("You're all set.", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold, color = cs.onBackground, textAlign = TextAlign.Center)
+            Text(tr("Todo listo.", "You're all set."), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold, color = cs.onBackground, textAlign = TextAlign.Center)
             Spacer(Modifier.height(12.dp))
             // Teaches both gestures in one line. Wispr Flow spends a whole onboarding screen on
             // the second one, which suggests hold-to-talk is not self-discoverable.
-            Text("Tap the bubble to talk, or hold it and release for a quick line. Everything stays on your phone.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+            Text(tr("Toca la burbuja para dictar, o mantenla presionada y suelta para una frase rápida. Todo se queda en tu teléfono.", "Tap the bubble to talk, or hold it and release for a quick line. Everything stays on your phone."), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
             Spacer(Modifier.height(24.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.surface).border(1.dp, cs.outline, RoundedCornerShape(14.dp))) {
-                RecapRow("Microphone", if (micOn) "On" else "Later", micOn, false)
-                RecapRow("Speech model", if (sttOn) "On" else "Downloading", sttOn, false)
-                RecapRow("Auto-insert", if (a11yOn) "On" else if (a11ySkipped) "Clipboard" else "Later", a11yOn, a11ySkipped)
+                RecapRow(tr("Micrófono", "Microphone"), if (micOn) tr("Activado", "On") else tr("Después", "Later"), micOn, false)
+                RecapRow(tr("Modelo de voz", "Speech model"), if (sttOn) tr("Listo", "On") else tr("Descargando", "Downloading"), sttOn, false)
+                RecapRow(tr("Inserción automática", "Auto-insert"), if (a11yOn) tr("Activada", "On") else if (a11ySkipped) tr("Portapapeles", "Clipboard") else tr("Después", "Later"), a11yOn, a11ySkipped)
             }
             Spacer(Modifier.height(12.dp))
             // Personalization used to be a whole step of four rows, each launching its own
@@ -1000,29 +1004,29 @@ private fun DoneStep(
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Teach it your words", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
+                    Text(tr("Enséñale tus palabras", "Teach it your words"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onBackground)
                     Text(
-                        "Names, jargon, contacts, tone per app. All learned on-device.",
+                        tr("Nombres, términos, contactos, tono por app. Todo se aprende en tu teléfono.", "Names, jargon, contacts, tone per app. All learned on-device."),
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                     )
                 }
-                ActionPill(if (personalCount > 0) "$personalCount set up" else "Set up")
+                ActionPill(if (personalCount > 0) tr("$personalCount listos", "$personalCount set up") else tr("Configurar", "Set up"))
             }
             Spacer(Modifier.height(14.dp))
             Text(
-                "Every permission here can be changed later in Settings.",
+                tr("Puedes cambiar cualquier permiso después en Ajustes.", "Every permission here can be changed later in Settings."),
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, textAlign = TextAlign.Center,
             )
         }
-        Cta("Start using OpenWispr", onClick = onStart)
-        SubLink("Replay onboarding", onClick = onReplay)
+        Cta(tr("Empezar a usar VoiceFlow", "Start using VoiceFlow"), onClick = onStart)
+        SubLink(tr("Repetir la introducción", "Replay onboarding"), onClick = onReplay)
     }
 }
 
 @Composable
 private fun RecapRow(label: String, status: String, on: Boolean, alt: Boolean) {
     val cs = MaterialTheme.colorScheme
-    val green = Color(0xFF3E8E5A)
+    val green = Color(0xFF047857)
     Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
         Box(Modifier.size(22.dp).clip(CircleShape).background(if (on || alt) Color(0xFFE7F3EA) else cs.surfaceVariant), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Check, null, tint = if (on || alt) green else cs.onSurfaceVariant, modifier = Modifier.size(13.dp))

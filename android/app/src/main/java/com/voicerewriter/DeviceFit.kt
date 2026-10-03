@@ -164,21 +164,33 @@ object DeviceFit {
      */
     fun explain(plan: Plan): String? = when {
         plan.storageShortMb > 0 ->
-            "This phone is about ${plan.storageShortMb}MB short of free space for the speech model. " +
-                "Free some up and reopen OpenWispr, or the download will stop partway."
+            tr("A este teléfono le faltan unos ${plan.storageShortMb}MB de espacio libre para el modelo de voz. " +
+                "Libera espacio y vuelve a abrir VoiceFlow, o la descarga se detendrá a la mitad.",
+                "This phone is about ${plan.storageShortMb}MB short of free space for the speech model. " +
+                "Free some up and reopen VoiceFlow, or the download will stop partway.")
         plan.tier != plan.ramTier ->
-            "OpenWispr picked a smaller speech model (${plan.downloadMb}MB) because this phone is " +
+            tr("VoiceFlow eligió un modelo de voz más pequeño (${plan.downloadMb}MB) porque este teléfono " +
+                "tiene poco espacio libre, no porque no pueda usar el grande. Libera espacio y " +
+                "podrás cambiarlo en Ajustes.",
+                "VoiceFlow picked a smaller speech model (${plan.downloadMb}MB) because this phone is " +
                 "low on free space, not because it can't run the larger one. Free some space and " +
-                "you can switch to it in Settings."
+                "you can switch to it in Settings.")
         plan.tier == Tier.COMPACT ->
-            "Your phone has less memory than the largest speech model needs, so OpenWispr will " +
+            tr("Tu teléfono tiene menos memoria de la que necesita el modelo de voz más grande, así que " +
+                "VoiceFlow usará uno más ligero (${plan.downloadMb}MB en lugar de ~1GB). Sigue funcionando " +
+                "sin internet, aunque es un poco menos preciso con audio largo o con ruido. Puedes " +
+                "cambiar al modelo grande en Ajustes.",
+                "Your phone has less memory than the largest speech model needs, so VoiceFlow will " +
                 "use a lighter one (${plan.downloadMb}MB instead of about 1GB). Still fully " +
                 "on-device — a little less accurate on long or noisy speech. You can switch to " +
-                "the large model in Settings."
+                "the large model in Settings.")
         plan.tier == Tier.MINIMAL ->
-            "OpenWispr picked its smallest speech model (${plan.downloadMb}MB) so it runs " +
+            tr("VoiceFlow eligió su modelo de voz más pequeño (${plan.downloadMb}MB) para que funcione " +
+                "con fluidez en este teléfono. Sigue siendo sin internet; funciona mejor con dictados " +
+                "cortos y claros. Hay modelos más grandes en Ajustes si quieres probar uno.",
+                "VoiceFlow picked its smallest speech model (${plan.downloadMb}MB) so it runs " +
                 "comfortably on this phone. Still fully on-device — best with short, clear " +
-                "dictation. Larger models are in Settings if you want to try one."
+                "dictation. Larger models are in Settings if you want to try one.")
         else -> null
     }
 
@@ -186,10 +198,10 @@ object DeviceFit {
     fun recommendationLabel(context: Context): String {
         val plan = plan(context)
         val ramGb = totalRamBytes(context).toDouble() / GIB
-        val ram = if (ramGb > 0) String.format("%.1fGB RAM", ramGb) else "unknown RAM"
+        val ram = if (ramGb > 0) String.format("%.1fGB RAM", ramGb) else tr("RAM desconocida", "unknown RAM")
         val stt = if (plan.usesParakeet) ParakeetModelManager.LABEL
         else WhisperModelManager.model(plan.sttModel).label
-        return "This device: $ram — recommended: $stt"
+        return tr("Este dispositivo: $ram — recomendado: $stt", "This device: $ram — recommended: $stt")
     }
 
     private fun sttFor(tier: Tier) = when (tier) {

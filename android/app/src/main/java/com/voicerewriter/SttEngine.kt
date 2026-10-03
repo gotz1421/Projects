@@ -38,12 +38,12 @@ object SttEngine {
      */
     suspend fun transcribe(settings: Settings, audio: File, biasPrompt: String? = null): String = withContext(Dispatchers.IO) {
         if (settings.sttKey.isBlank()) {
-            throw IllegalStateException("No speech-to-text key set. Open OpenWispr settings.")
+            throw IllegalStateException(tr("No hay clave de voz a texto. Abre los ajustes de VoiceFlow.", "No speech-to-text key set. Open VoiceFlow settings."))
         }
         val url = settings.sttEndpointResolved
-        if (url.isEmpty()) throw IllegalStateException("Speech-to-text endpoint not configured.")
+        if (url.isEmpty()) throw IllegalStateException(tr("No hay endpoint de voz a texto configurado.", "Speech-to-text endpoint not configured."))
         val model = settings.sttModelResolved
-        if (model.isEmpty()) throw IllegalStateException("No speech-to-text model configured.")
+        if (model.isEmpty()) throw IllegalStateException(tr("No hay modelo de voz a texto configurado.", "No speech-to-text model configured."))
 
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)

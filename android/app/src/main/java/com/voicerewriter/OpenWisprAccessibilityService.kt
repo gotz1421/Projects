@@ -240,24 +240,57 @@ class OpenWisprAccessibilityService : AccessibilityService() {
     private fun attemptInsert() {
         val text = pendingText ?: return
         val node = findHostFocusedEditable() ?: return
+        var spliced = false
         val ok = try {
             // Prefer a clipboard-free splice at the cursor; fall back to paste only when
             // we can't determine the cursor (e.g. some WebView fields).
-            insertAtCursor(node, text) || pasteViaClipboard(node, text)
+            spliced = insertAtCursor(node, text)
+            spliced || pasteViaClipboard(node, text)
         } catch (e: Exception) {
             Log.e(TAG, "insert action failed", e); false
         } finally {
             @Suppress("DEPRECATION") node.recycle()
         }
         if (ok) {
-            Log.i(TAG, "inserted into host field")
+            Log.i(TAG, "inserted into host field (spliced=$spliced)")
             pendingText = null
             main.removeCallbacksAndMessages(null)
+            // Some apps accept ACTION_SET_TEXT and then quietly put their own text back (fields
+            // whose content is owned by app code, common in React Native / Compose apps). Check
+            // a moment later; if the words are not there, paste them instead.
+            if (spliced) main.postDelayed({ verifySplice(text) }, 350)
             // The haptic tick is the confirmation. A toast on top of text visibly appearing in
             // the field is telling the user something they can already see.
             vibrateTick()
         }
     }
+
+    private fun verifySplice(text: String) {
+        val node = findHostFocusedEditable()
+        if (node == null) {
+            // The field went away (app switched screens). Leave the words where they can be reached.
+            setClipboard(text)
+            return
+        }
+        try {
+            val current = if (showingHint(node)) "" else node.text?.toString().orEmpty()
+            if (!normalized(current).contains(normalized(text).take(40))) {
+                Log.i(TAG, "splice was reverted by the app; pasting instead")
+                if (!pasteViaClipboard(node, text)) setClipboard(text)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "verify failed", e)
+            setClipboard(text)
+        } finally {
+            @Suppress("DEPRECATION") node.recycle()
+        }
+    }
+
+    private fun normalized(s: String) = s.lowercase().filter { !it.isWhitespace() }
+
+    /** An empty field can report its placeholder as its text; never splice into a hint. */
+    private fun showingHint(node: AccessibilityNodeInfo): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.isShowingHintText
 
     /**
      * Clipboard-free insert: splice [insert] in at the cursor (replacing any active
@@ -266,7 +299,7 @@ class OpenWisprAccessibilityService : AccessibilityService() {
      * paste. This is the path that keeps the clipboard untouched on a normal dictation.
      */
     private fun insertAtCursor(node: AccessibilityNodeInfo, insert: String): Boolean {
-        val current = node.text?.toString() ?: ""
+        val current = if (showingHint(node)) "" else node.text?.toString() ?: ""
         val selA = node.textSelectionStart
         val selB = node.textSelectionEnd
         val (start, end) = when {
@@ -275,12 +308,15 @@ class OpenWisprAccessibilityService : AccessibilityService() {
             current.isEmpty() -> 0 to 0
             else -> return false // unknown cursor in a non-empty field — let paste handle it
         }
-        val newText = current.substring(0, start) + insert + current.substring(end)
+        // Join naturally with what's already there: "hola" + "qué tal" → "hola qué tal".
+        val needsSpace = start > 0 && !current[start - 1].isWhitespace() && insert.firstOrNull()?.isWhitespace() == false
+        val piece = if (needsSpace) " $insert" else insert
+        val newText = current.substring(0, start) + piece + current.substring(end)
         val setArgs = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, newText)
         }
         if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, setArgs)) return false
-        val cursor = start + insert.length
+        val cursor = start + piece.length
         val selArgs = Bundle().apply {
             putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, cursor)
             putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, cursor)
@@ -296,15 +332,37 @@ class OpenWisprAccessibilityService : AccessibilityService() {
         return node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
     }
 
-    /** Focused editable node in the active window, only if it's NOT our own app. */
+    /**
+     * The host app's field to type into, never one of ours. Looks in the active window first,
+     * then in every other window: across an app switch, or with a dialog/bottom sheet up, the
+     * "active" window is often not the one that owns the input focus. Accepts a focused node
+     * that can take text even when it doesn't flag itself editable (some WebView and Flutter
+     * fields), as long as it supports SET_TEXT or PASTE.
+     */
     private fun findHostFocusedEditable(): AccessibilityNodeInfo? {
-        val root = rootInActiveWindow ?: return null
-        if (root.packageName == packageName) return null // our sheet is still up
-        val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        if (focused != null && focused.isEditable) return focused
-        @Suppress("DEPRECATION") focused?.recycle()
+        val roots = ArrayList<AccessibilityNodeInfo>()
+        rootInActiveWindow?.let { roots.add(it) }
+        val wins = try { windows } catch (_: Exception) { null }
+        wins?.forEach { w ->
+            if (w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
+            w.root?.let { roots.add(it) }
+        }
+        for (root in roots) {
+            if (root.packageName == packageName) continue // our own window
+            val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: continue
+            if (focused.packageName == packageName) {
+                @Suppress("DEPRECATION") focused.recycle(); continue
+            }
+            if (focused.isEditable || acceptsText(focused)) return focused
+            @Suppress("DEPRECATION") focused.recycle()
+        }
         return null
     }
+
+    private fun acceptsText(node: AccessibilityNodeInfo): Boolean =
+        node.actionList.any {
+            it.id == AccessibilityNodeInfo.ACTION_SET_TEXT || it.id == AccessibilityNodeInfo.ACTION_PASTE
+        }
 
     private fun setClipboard(text: String) {
         val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

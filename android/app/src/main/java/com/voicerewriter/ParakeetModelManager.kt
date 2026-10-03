@@ -24,7 +24,7 @@ import java.io.File
 object ParakeetModelManager {
 
     const val MODEL_ID = "parakeet"
-    const val LABEL = "Parakeet (fastest + most accurate)"
+    val LABEL: String get() = tr("Parakeet (el más rápido y preciso)", "Parakeet (fastest + most accurate)")
     const val SIZE_LABEL = "~631MB"
 
     const val ENCODER = "encoder.int8.onnx"

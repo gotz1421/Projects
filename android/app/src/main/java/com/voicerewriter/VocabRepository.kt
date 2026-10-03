@@ -35,7 +35,11 @@ class VocabRepository(context: Context) {
                 val learned = if (learnedArr != null)
                     (0 until learnedArr.length()).map { learnedArr.optString(it).trim() }.filter { it.isNotEmpty() }
                 else emptyList()
-                VocabEntry(canonical, aliases, expansion, source, learned)
+                val voiceArr = o.optJSONArray("voiceSamples")
+                val voice = if (voiceArr != null)
+                    (0 until voiceArr.length()).map { voiceArr.optString(it).trim() }.filter { it.isNotEmpty() }
+                else emptyList()
+                VocabEntry(canonical, aliases, expansion, source, learned, voice)
             }
         } catch (e: Exception) {
             Log.e("VocabRepository", "failed to read $file", e); emptyList()
@@ -97,6 +101,7 @@ class VocabRepository(context: Context) {
                 .apply {
                     if (e.learnedAliases.isNotEmpty())
                         put("learnedAliases", JSONArray(e.learnedAliases.map { it.trim() }.filter { it.isNotEmpty() }))
+                    if (e.voiceSamples.isNotEmpty()) put("voiceSamples", JSONArray(e.voiceSamples))
                 })
         }
         file.writeText(arr.toString())
