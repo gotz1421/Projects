@@ -569,6 +569,9 @@ class RewriteActivity : ComponentActivity() {
             durationSec = ((System.currentTimeMillis() - recStartMs) / 1000L).toInt().coerceAtLeast(1)
             BubbleService.recordingStopper = null
             ampJob?.cancel()
+            // Switch the bubble to its working animation the instant the take ends, so there's
+            // no frozen "still listening" frame while the audio is saved.
+            BubbleService.instance?.showProcessing()
             val samples = audioRecorder.stop()
             if (samples == null) {
                 error = tr("No se captó audio. Toca y habla un poco más.", "Didn't catch any audio. Tap and speak a little longer.")
