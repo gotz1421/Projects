@@ -2,7 +2,7 @@ package com.voicerewriter
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.InstallSourceInfo
+import android.content.pm.PackageInstaller
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -94,8 +94,8 @@ class AccessibilityGuideActivity : ComponentActivity() {
         fun isRestricted(ctx: Context): Boolean {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
             val source = runCatching { ctx.packageManager.getInstallSourceInfo(ctx.packageName).packageSource }
-                .getOrDefault(InstallSourceInfo.PACKAGE_SOURCE_UNSPECIFIED)
-            return source != InstallSourceInfo.PACKAGE_SOURCE_STORE
+                .getOrDefault(PackageInstaller.PACKAGE_SOURCE_UNSPECIFIED)
+            return source != PackageInstaller.PACKAGE_SOURCE_STORE
         }
     }
 
@@ -148,7 +148,7 @@ class AccessibilityGuideActivity : ComponentActivity() {
                         "In App info, tap the three dots ⋮ at the top right and choose “Allow restricted " +
                         "settings”. Your phone may ask for your PIN or fingerprint."),
                     tr("Abrir información de VoiceFlow", "Open VoiceFlow app info"),
-                    { startActivity(SetupUtils.appInfoIntent(this)) },
+                    { startActivity(SetupUtils.appInfoIntent(this@AccessibilityGuideActivity)) },
                 ) { AppInfoArt() })
             }
             add(Step(
