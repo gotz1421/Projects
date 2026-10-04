@@ -54,6 +54,12 @@
             android:exported="false"
             android:label="@string/app_name" />
 
+        <!-- Step-by-step guide for turning on accessibility (incl. restricted settings) -->
+        <activity
+            android:name=".AccessibilityGuideActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
         <!-- Personal dictionary management -->
         <activity
             android:name=".VocabActivity"

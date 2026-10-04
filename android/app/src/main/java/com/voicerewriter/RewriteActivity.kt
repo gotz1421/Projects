@@ -98,15 +98,12 @@ import kotlinx.coroutines.launch
 import com.voicerewriter.ui.FlowMint
 import com.voicerewriter.ui.FlowLight
 import com.voicerewriter.ui.FlowNavy
-import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 
 class RewriteActivity : ComponentActivity() {
 
@@ -661,6 +658,13 @@ class RewriteActivity : ComponentActivity() {
                     if (OnDeviceStt.isParakeet(s.sttModel)) ParakeetModelManager.ensureDownloading(this)
                     error = null
                     stage = Stage.WAITING_MODEL
+                    // No status bar any more, so say it once and let the bubble show it's working.
+                    BubbleService.instance?.showProcessing()
+                    android.widget.Toast.makeText(
+                        this@RewriteActivity,
+                        tr("Terminando de descargar el modelo de voz…", "Finishing the speech model download…"),
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
                     scope.launch {
                         val deadline = System.currentTimeMillis() + MODEL_WAIT_TIMEOUT_MS
                         while (System.currentTimeMillis() < deadline) {
@@ -768,112 +772,35 @@ class RewriteActivity : ComponentActivity() {
                     .navigationBarsPadding().padding(horizontal = 16.dp, vertical = 20.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                AnimatedContent(
-                    targetState = if (stage == Stage.ERROR || stage == Stage.IDLE) "error" else "pill",
-                    transitionSpec = {
-                        (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 3 })
-                            .togetherWith(fadeOut(tween(160)))
-                    },
-                    label = "voice-ui",
-                ) { kind ->
-                    if (kind == "pill") {
-                        StatusPill(
-                            stage = stage,
-                            amps = amps,
-                            title = when (stage) {
-                                Stage.WAITING_MODEL -> tr("Terminando de preparar", "Finishing setup")
-                                Stage.RECORDING -> tr("Escuchando…", "Listening…")
-                                Stage.TRANSCRIBING -> tr("Transcribiendo…", "Transcribing…")
-                                Stage.CORRECTING -> tr("Puliendo el texto…", "Polishing…")
-                                else -> ""
-                            },
-                            subtitle = when (stage) {
-                                Stage.WAITING_MODEL -> {
-                                    val showPct = settings?.sttModel?.let { OnDeviceStt.isParakeet(it) } == true
-                                    if (showPct) tr("Descargando el modelo de voz (${(parakeetDlPct * 100).toInt()}%)",
-                                        "Downloading the speech model (${(parakeetDlPct * 100).toInt()}%)")
-                                    else tr("Descargando el modelo de voz", "Downloading the speech model")
-                                }
-                                // Only promise an auto-stop when one can actually happen.
-                                Stage.RECORDING -> when {
-                                    pushToTalk -> tr("Suelta para enviar", "Release to send")
-                                    audioRecorder.vadActive -> tr("Me detengo cuando hagas una pausa", "I'll stop when you pause")
-                                    else -> tr("Toca la burbuja al terminar", "Tap the bubble when you're done")
-                                }
-                                else -> tr("Se insertará en automático", "It'll be inserted automatically")
-                            },
-                            onCancel = if (stage == Stage.RECORDING || stage == Stage.WAITING_MODEL) {
-                                { cancelAndFinish(discardAudio = true) }
-                            } else null,
-                            onDone = if (stage == Stage.RECORDING) { { onMicTap() } } else null,
-                        )
-                    } else {
-                        // The recording outlived the failure, so offer to re-run it before asking
-                        // the user to say the whole thing again. Re-running the *same* on-device
-                        // engine on the *same* samples fails identically, so a retry prefers the
-                        // other downloaded engine when there is one.
-                        val saved = pendingId
-                        val alt = if (saved != null) settings?.let { altOnDeviceEngine(it) } else null
-                        ErrorCard(
-                            message = error ?: tr("Algo salió mal.", "Something went wrong."),
-                            detail = when {
-                                saved == null -> null
-                                alt != null -> tr("Tu grabación está guardada en este dispositivo; no se perdió nada. Reintentar la procesa con ${alt.second}.",
-                                    "Your recording is saved on this device. Nothing was lost. Retry runs it again on ${alt.second}.")
-                                else -> tr("Tu grabación está guardada en este dispositivo; no se perdió nada.",
-                                    "Your recording is saved on this device. Nothing was lost.")
-                            },
-                            onRetry = if (saved != null) {
-                                { settings?.let { s -> retryTranscription(if (alt != null) s.copy(sttModel = alt.first) else s) } }
-                            } else null,
-                            recordLabel = if (saved != null) tr("Grabar de nuevo", "Record again") else tr("Intentar de nuevo", "Try again"),
-                            onRecord = { onMicTap() },
-                            onClose = { cancelAndFinish() },
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    /** The compact, dark status pill shown while listening and while the text is processed. */
-    @Composable
-    private fun StatusPill(
-        stage: Stage,
-        amps: List<Float>,
-        title: String,
-        subtitle: String,
-        onCancel: (() -> Unit)?,
-        onDone: (() -> Unit)?,
-    ) {
-        Surface(
-            shape = RoundedCornerShape(30.dp),
-            color = FlowNavy.copy(alpha = 0.94f),
-            shadowElevation = 12.dp,
-            modifier = Modifier.widthIn(max = 460.dp),
-        ) {
-            Row(
-                Modifier.padding(start = 10.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                StatusGlyph(listening = stage == Stage.RECORDING, amps = amps, modifier = Modifier.size(44.dp))
-                Column(Modifier.weight(1f, fill = false).widthIn(min = 120.dp)) {
-                    Text(title, color = FlowWhite, style = MaterialTheme.typography.titleSmall)
-                    Text(subtitle, color = FlowLight.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall)
-                }
-                if (onCancel != null) {
-                    IconButton(onClick = onCancel) {
-                        Icon(Icons.Default.Close, tr("Cancelar", "Cancel"), tint = FlowLight.copy(alpha = 0.8f))
-                    }
-                }
-                if (onDone != null) {
-                    Box(
-                        Modifier.size(40.dp).clip(CircleShape).background(FlowBrush).clickable(onClick = onDone),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Default.Check, tr("Listo", "Done"), tint = FlowWhite, modifier = Modifier.size(22.dp))
-                    }
+                // No status bar while listening or transcribing: the bubble's animation is the
+                // only feedback. Something appears here only when a dictation fails.
+                AnimatedVisibility(
+                    visible = stage == Stage.ERROR,
+                    enter = fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 3 },
+                    exit = fadeOut(tween(160)),
+                ) {
+                    // The recording outlived the failure, so offer to re-run it before asking
+                    // the user to say the whole thing again. Re-running the *same* on-device
+                    // engine on the *same* samples fails identically, so a retry prefers the
+                    // other downloaded engine when there is one.
+                    val saved = pendingId
+                    val alt = if (saved != null) settings?.let { altOnDeviceEngine(it) } else null
+                    ErrorCard(
+                        message = error ?: tr("Algo salió mal.", "Something went wrong."),
+                        detail = when {
+                            saved == null -> null
+                            alt != null -> tr("Tu grabación está guardada en este dispositivo; no se perdió nada. Reintentar la procesa con ${alt.second}.",
+                                "Your recording is saved on this device. Nothing was lost. Retry runs it again on ${alt.second}.")
+                            else -> tr("Tu grabación está guardada en este dispositivo; no se perdió nada.",
+                                "Your recording is saved on this device. Nothing was lost.")
+                        },
+                        onRetry = if (saved != null) {
+                            { settings?.let { s -> retryTranscription(if (alt != null) s.copy(sttModel = alt.first) else s) } }
+                        } else null,
+                        recordLabel = if (saved != null) tr("Grabar de nuevo", "Record again") else tr("Intentar de nuevo", "Try again"),
+                        onRecord = { onMicTap() },
+                        onClose = { cancelAndFinish() },
+                    )
                 }
             }
         }
@@ -914,74 +841,6 @@ class RewriteActivity : ComponentActivity() {
                     }
                     TextButton(onClick = onRecord) {
                         Icon(Icons.Default.Mic, null, Modifier.size(18.dp)); Text("  $recordLabel")
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * The pill's icon, matching the bubble: a gradient microphone with rippling rings while
-     * listening, a navy disc with a rotating arc and moving waveform while processing.
-     */
-    @Composable
-    private fun StatusGlyph(listening: Boolean, amps: List<Float>, modifier: Modifier = Modifier) {
-        val t = rememberInfiniteTransition(label = "glyph")
-        val phase by t.animateFloat(
-            initialValue = 0f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing)),
-            label = "phase",
-        )
-        val level = amps.takeLast(6).maxOrNull() ?: 0f
-        val mic = painterResource(R.drawable.ic_voiceflow)
-        Box(modifier, contentAlignment = Alignment.Center) {
-            Crossfade(targetState = listening, animationSpec = tween(240), label = "glyph-state") { isListening ->
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        val c = Offset(size.width / 2f, size.height / 2f)
-                        val half = size.minDimension / 2f
-                        val r = half * 0.74f
-                        if (isListening) {
-                            for (k in 0..1) {
-                                val p = (phase + k * 0.5f) % 1f
-                                drawCircle(
-                                    color = FlowCyan.copy(alpha = (1f - p) * 0.55f),
-                                    radius = r + (half - r) * p,
-                                    center = c,
-                                    style = Stroke(width = 2.dp.toPx()),
-                                )
-                            }
-                            drawCircle(brush = FlowBrush, radius = r * (1f + level * 0.08f), center = c)
-                        } else {
-                            drawCircle(color = Color(0xFF12263A), radius = r, center = c)
-                            val w = 2.5.dp.toPx()
-                            rotate(phase * 720f) {
-                                drawArc(
-                                    brush = Brush.sweepGradient(listOf(FlowCyan.copy(alpha = 0f), FlowCyan, FlowBlue)),
-                                    startAngle = 0f, sweepAngle = 270f, useCenter = false,
-                                    topLeft = Offset(c.x - r + w, c.y - r + w),
-                                    size = Size((r - w) * 2f, (r - w) * 2f),
-                                    style = Stroke(width = w, cap = StrokeCap.Round),
-                                )
-                            }
-                            val bars = floatArrayOf(0.45f, 0.75f, 1f, 0.75f, 0.45f)
-                            val barW = r * 0.13f
-                            val gap = r * 0.09f
-                            var x = c.x - (bars.size * barW + (bars.size - 1) * gap) / 2f + barW / 2f
-                            bars.forEachIndexed { i, base ->
-                                val wave = 0.55f + 0.45f * kotlin.math.sin(phase * 2f * Math.PI.toFloat() * 2f + i * 0.9f)
-                                val h = r * 0.9f * base * wave
-                                drawLine(
-                                    color = if (i == 2) FlowMint else FlowCyan,
-                                    start = Offset(x, c.y - h / 2f), end = Offset(x, c.y + h / 2f),
-                                    strokeWidth = barW, cap = StrokeCap.Round,
-                                )
-                                x += barW + gap
-                            }
-                        }
-                    }
-                    if (isListening) {
-                        Icon(mic, null, tint = FlowWhite, modifier = Modifier.fillMaxSize(0.42f))
                     }
                 }
             }

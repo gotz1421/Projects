@@ -24,6 +24,12 @@ object BubblePrefs {
     private const val KEY_X = "x"
     private const val KEY_Y = "y"
     private const val KEY_OPACITY = "opacity"
+    private const val KEY_SNOOZE_UNTIL = "snooze_until"
+    private const val KEY_SNOOZE_MINUTES = "snooze_minutes"
+
+    /** Nap lengths offered in Settings for dropping the bubble on the "Zzz" target. */
+    val SNOOZE_CHOICES = listOf(3, 5, 10)
+    const val DEFAULT_SNOOZE_MINUTES = 3
 
     /** Idle opacity of the bubble. Semi-transparent so it doesn't hide what's underneath. */
     const val DEFAULT_OPACITY = 0.55f
@@ -41,7 +47,7 @@ object BubblePrefs {
      * than in `onDestroy` — the system can destroy a foreground service under memory pressure, and
      * treating that as "the user turned it off" would reintroduce the bug from the other side.
      */
-    fun enabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_ENABLED, false)
+    fun enabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_ENABLED, true) // VoiceFlow: the bubble is the app, on by default
 
     fun setEnabled(ctx: Context, on: Boolean) {
         prefs(ctx).edit().putBoolean(KEY_ENABLED, on).apply()
@@ -67,6 +73,25 @@ object BubblePrefs {
     }
 
     fun clampOpacity(value: Float): Float = value.coerceIn(MIN_OPACITY, 1f)
+
+    /** How long a nap lasts (minutes). */
+    fun snoozeMinutes(ctx: Context): Int =
+        prefs(ctx).getInt(KEY_SNOOZE_MINUTES, DEFAULT_SNOOZE_MINUTES).takeIf { it in SNOOZE_CHOICES }
+            ?: DEFAULT_SNOOZE_MINUTES
+
+    fun setSnoozeMinutes(ctx: Context, minutes: Int) {
+        prefs(ctx).edit().putInt(KEY_SNOOZE_MINUTES, minutes).apply()
+    }
+
+    /**
+     * Until when (epoch ms) the bubble is napping, or 0. Persisted so a nap survives the service
+     * being restarted mid-nap instead of the bubble popping straight back.
+     */
+    fun snoozeUntil(ctx: Context): Long = prefs(ctx).getLong(KEY_SNOOZE_UNTIL, 0L)
+
+    fun setSnoozeUntil(ctx: Context, until: Long) {
+        prefs(ctx).edit().putLong(KEY_SNOOZE_UNTIL, until).apply()
+    }
 
     /**
      * Where the bubble should sit while the keyboard is up, given where it normally lives.

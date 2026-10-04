@@ -22,7 +22,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.ImageView
+import android.app.PendingIntent
+import android.graphics.Typeface
+import android.util.TypedValue
+import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.arm.aichat.AiChat
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +74,9 @@ class BubbleService : Service() {
         @Volatile
         var holdingToTalk = false
 
+        /** Notification tap while napping: wake the bubble now. */
+        const val ACTION_RESUME = "com.voiceflow.RESUME_BUBBLE"
+
         private const val CHANNEL_ID = "bubble"
         private const val NOTIF_ID = 1
     }
@@ -108,6 +115,11 @@ class BubbleService : Service() {
     /** The user's own y, remembered while the bubble is lifted above the keyboard. */
     private var homeY: Int? = null
 
+    // Nap: dropping the bubble on the "Zzz" target hides it for a few minutes, even while typing.
+    private var snoozedUntil = 0L
+    private val wake = Runnable { endSnooze() }
+    private fun snoozed(): Boolean = System.currentTimeMillis() < snoozedUntil
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -121,6 +133,13 @@ class BubbleService : Service() {
             runBlocking { SettingsRepository(applicationContext).get().bubbleOnlyOnFields }
         } catch (_: Exception) { true }
         addBubble()
+        // A nap that was in progress when the service last stopped carries on.
+        val until = BubblePrefs.snoozeUntil(this)
+        if (until > System.currentTimeMillis()) {
+            snoozedUntil = until
+            mainHandler.postDelayed(wake, until - System.currentTimeMillis())
+            refreshNotification()
+        }
         isRunning = true
         instance = this
         // If gated, start hidden until the accessibility service reports a focused field.
@@ -153,7 +172,37 @@ class BubbleService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_RESUME) mainHandler.post { endSnooze() }
+        return START_STICKY
+    }
+
+    /** Put the bubble to sleep for the user's chosen nap length. */
+    private fun snooze() {
+        val minutes = BubblePrefs.snoozeMinutes(this)
+        snoozedUntil = System.currentTimeMillis() + minutes * 60_000L
+        BubblePrefs.setSnoozeUntil(this, snoozedUntil)
+        mainHandler.removeCallbacks(wake)
+        mainHandler.postDelayed(wake, minutes * 60_000L)
+        applyGating(animate = true)
+        refreshNotification()
+        Toast.makeText(
+            this,
+            tr("VoiceFlow en pausa $minutes min · toca la notificación para reactivarla",
+                "VoiceFlow paused for $minutes min · tap the notification to wake it"),
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    private fun endSnooze() {
+        mainHandler.removeCallbacks(wake)
+        if (snoozedUntil == 0L) return
+        snoozedUntil = 0L
+        BubblePrefs.setSnoozeUntil(this, 0L)
+        refreshNotification()
+        applyGating(animate = true)
+        OpenWisprAccessibilityService.reevaluate()
+    }
 
     /** Rebuild the ongoing notification, e.g. after the app language changes. */
     fun refreshNotification() {
@@ -173,13 +222,21 @@ class BubbleService : Service() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
-        return builder
-            .setSmallIcon(R.drawable.ic_voiceflow)
-            .setContentTitle("VoiceFlow")
-            .setContentText(tr("Toca para dictar · mantén presionado para hablar y suelta para enviar",
+        builder.setSmallIcon(R.drawable.ic_voiceflow).setContentTitle("VoiceFlow").setOngoing(true)
+        if (snoozed()) {
+            val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(snoozedUntil))
+            val resume = PendingIntent.getService(
+                this, 1, Intent(this, BubbleService::class.java).setAction(ACTION_RESUME),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            builder.setContentText(tr("En pausa hasta las $time · toca para reactivar", "Paused until $time · tap to wake"))
+                .setContentIntent(resume)
+        } else {
+            builder.setContentText(tr("Toca para dictar · mantén presionado para hablar y suelta para enviar",
                 "Tap to dictate · hold to talk, release to send"))
-            .setOngoing(true)
-            .build()
+                .setContentIntent(null)
+        }
+        return builder.build()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -317,12 +374,15 @@ class BubbleService : Service() {
                     }
                     if (moved && overDismiss) {
                         vibrate(longArrayOf(0, 40))
-                        // Drag-to-dismiss is the user switching the bubble off, so it must not
-                        // come back on the next boot. Note the position is deliberately NOT
-                        // saved here: the last thing they did was drag it onto the dismiss
-                        // target, which is nowhere they'd want it to reappear.
-                        BubblePrefs.setEnabled(this@BubbleService, false)
-                        stopSelf() // drag-to-dismiss
+                        // Dropped on "Zzz": a nap, not an off switch. The bubble goes back to
+                        // where it was before the drag (not onto the target) and hides until the
+                        // nap ends.
+                        hideDismiss()
+                        overDismiss = false
+                        params.x = startX
+                        params.y = startY
+                        container?.let { wm.updateViewLayout(it, params) }
+                        snooze()
                         return@setOnTouchListener true
                     }
                     hideDismiss()
@@ -360,9 +420,14 @@ class BubbleService : Service() {
             background = ContextCompat.getDrawable(this@BubbleService, R.drawable.dismiss_background)
             visibility = View.GONE
         }
-        val x = ImageView(this).apply {
-            setImageResource(R.drawable.ic_close)
-            setPadding(pad, pad, pad, pad)
+        // "Zzz": dropping the bubble here puts it to sleep for a few minutes.
+        val x = TextView(this).apply {
+            text = "Zzz"
+            setTextColor(0xFFFFFFFF.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding(pad / 4, 0, pad / 4, 0)
         }
         frame.addView(x, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
@@ -471,7 +536,8 @@ class BubbleService : Service() {
     /** Whether visibility should track focused text fields (needs accessibility on). */
     private fun gateActive(): Boolean = gateSetting && OpenWisprAccessibilityService.isEnabled
 
-    private fun shouldShow(): Boolean = recording || processing || fieldFocused || !gateActive()
+    private fun shouldShow(): Boolean =
+        recording || processing || (!snoozed() && (fieldFocused || !gateActive()))
 
     /**
      * Called by the accessibility service when the user can or can't type: a host app's

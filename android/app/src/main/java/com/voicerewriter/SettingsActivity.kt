@@ -133,6 +133,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
     var parakeetHotwordsExperimental by remember { mutableStateOf(false) }
     var bubbleOnlyOnFields by remember { mutableStateOf(true) }
     var bubbleOpacity by remember { mutableStateOf(BubblePrefs.opacity(context)) }
+    var snoozeMinutes by remember { mutableStateOf(BubblePrefs.snoozeMinutes(context)) }
     var keepHistory by remember { mutableStateOf(DictationHistory.keepHistory(context)) }
     var audioKeepDays by remember { mutableStateOf(PendingAudio.keepDays(context)) }
 
@@ -189,7 +190,8 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                 a11yEnabled = SetupUtils.accessibilityEnabled(context)
                 notifOn = SetupUtils.notificationsGranted(context)
                 micGranted = SetupUtils.micGranted(context)
-                val wanted = BubblePrefs.enabled(context) && SetupUtils.canDrawOverlays(context)
+                // The bubble is how VoiceFlow is used, so it's always on once overlays are allowed.
+                val wanted = SetupUtils.canDrawOverlays(context)
                 if (!BubbleService.isRunning && wanted) SetupUtils.startBubble(context)
                 // `isRunning` only flips in the service's onCreate, which hasn't happened yet on
                 // the line after startForegroundService — so trust the intent we just acted on
@@ -331,7 +333,8 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     onConfirm = {
                         showA11yConsent = false
                         AccessibilityConsent.record(context)
-                        openA11ySettings()
+                        // The guide walks through Android's "restricted settings" for APK installs.
+                        a11yLauncher.launch(AccessibilityGuideActivity.intent(context))
                     },
                     onDismiss = { showA11yConsent = false },
                 )
@@ -510,10 +513,6 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             // ---------------- BUBBLE ----------------
             Section(tr("Burbuja", "Bubble")) {
                 Card {
-                    ToggleRow(tr("Mostrar burbuja", "Show bubble"), tr("El botón flotante para dictar", "The floating tap-to-talk button"), bubbleOn) { want ->
-                        if (want) enableBubble() else { SetupUtils.stopBubble(context); bubbleOn = false }
-                    }
-                    Divider()
                     // Field gating is driven by the accessibility service (BubbleService.gateActive
                     // needs it to know what's focused). With the grant revoked the toggle keeps
                     // reading "on" while the bubble is in fact always visible, which looks like the
@@ -521,13 +520,14 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     ToggleRow(
                         tr("Solo al escribir", "Only when typing"),
                         if (bubbleOnlyOnFields && !a11yEnabled) tr("Requiere la inserción automática. La burbuja se queda visible hasta que la actives.", "Needs auto-insert. The bubble stays visible until you turn it back on.")
-                        else tr("Aparece cada vez que se abre el teclado", "Appears whenever the keyboard opens"),
+                        else if (bubbleOnlyOnFields) tr("Aparece cada vez que se abre el teclado", "Appears whenever the keyboard opens")
+                        else tr("Siempre visible en pantalla", "Always on screen"),
                         bubbleOnlyOnFields,
                     ) { bubbleOnlyOnFields = it; persist() }
                     Divider()
                     // Idle transparency. Live-applied so the user sees the bubble change as they
                     // drag; it still goes fully opaque while touched or recording.
-                    Column {
+                    Padded {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(tr("Opacidad de la burbuja", "Bubble opacity"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                             Text("${(bubbleOpacity * 100).toInt()}%", style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -540,6 +540,26 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                                 BubbleService.instance?.refreshOpacity()
                             },
                             valueRange = BubblePrefs.MIN_OPACITY..1f,
+                        )
+                    }
+                    Divider()
+                    // Dropping the bubble on "Zzz" (bottom of the screen) puts it to sleep.
+                    Padded {
+                        Label(tr("Pausa con «Zzz»", "“Zzz” nap"))
+                        Text(
+                            tr("Arrastra la burbuja abajo al centro y suéltala en «Zzz» para ocultarla un rato, aunque escribas.",
+                                "Drag the bubble to the bottom center and drop it on “Zzz” to hide it for a while, even while typing."),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(11.dp))
+                        Segment(
+                            options = BubblePrefs.SNOOZE_CHOICES.map { it.toString() to "$it min" },
+                            selected = snoozeMinutes.toString(),
+                            onSelect = { m ->
+                                snoozeMinutes = m.toInt()
+                                BubblePrefs.setSnoozeMinutes(context, snoozeMinutes)
+                            },
                         )
                     }
                 }

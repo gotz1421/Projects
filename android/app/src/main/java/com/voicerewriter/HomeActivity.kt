@@ -942,7 +942,6 @@ class HomeActivity : ComponentActivity() {
      */
     private fun restoreBubbleIfWanted(ctx: Context) {
         if (BubbleService.isRunning) return
-        if (!BubblePrefs.enabled(ctx)) return
         if (!SetupUtils.canDrawOverlays(ctx)) return
         try {
             SetupUtils.startBubble(ctx)

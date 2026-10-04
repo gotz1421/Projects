@@ -388,7 +388,8 @@ private fun OnboardingScreen(onLaunchDictation: () -> Unit, onGoHome: () -> Unit
                 showA11yConsent = false
                 sentToA11ySettings = true
                 AccessibilityConsent.record(ctx)
-                ctx.startActivity(SetupUtils.accessibilitySettingsIntent())
+                // The guide walks through Android's "restricted settings" for APK installs.
+                ctx.startActivity(AccessibilityGuideActivity.intent(ctx))
             },
             onDismiss = { showA11yConsent = false },
         )
