@@ -65,7 +65,9 @@ data class Settings(
     val defaultMode: String = Defaults.MODE_DICTATE, // "dictate" | "rewrite"
     val deterministicCleanup: Boolean = true, // fast rule-based cleanup (fillers, spoken forms, numbers, self-corrections)
     val polishLevel: PolishLevel = PolishLevel.FULL, // LLM polish intensity (replaces the old on/off toggle)
-    val vadAutoStop: Boolean = true, // Silero VAD: auto-stop when the speaker pauses
+    // Silero VAD: auto-stop when the speaker pauses. Off by default in VoiceFlow: a dictation
+    // ends only when the user taps the bubble, so a pause to think never cuts them off.
+    val vadAutoStop: Boolean = false,
     val bubbleOnlyOnFields: Boolean = true, // show the bubble only while a text field is focused (needs accessibility)
     val hasCompletedOnboarding: Boolean = false, // first-run onboarding shown once; re-launchable from Settings
     // Experimental: Parakeet vocab-bias via sherpa hotwords + modified_beam_search. Off by
@@ -118,7 +120,8 @@ class SettingsRepository(private val context: Context) {
         val DEFAULT_MODE = stringPreferencesKey("defaultMode")
         val DETERMINISTIC_CLEANUP = booleanPreferencesKey("deterministicCleanup")
         val POLISH_LEVEL = stringPreferencesKey("polishLevel")
-        val VAD_AUTO_STOP = booleanPreferencesKey("vadAutoStop")
+        // New key: the old one defaulted to on, and VoiceFlow wants every install to start off.
+        val VAD_AUTO_STOP = booleanPreferencesKey("vadAutoStopV2")
         val BUBBLE_ONLY_ON_FIELDS = booleanPreferencesKey("bubbleOnlyOnFields")
         val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("hasCompletedOnboarding")
         val PARAKEET_HOTWORDS_EXPERIMENTAL = booleanPreferencesKey("parakeetHotwordsExperimental")

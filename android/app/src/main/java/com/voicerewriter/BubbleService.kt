@@ -23,6 +23,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.app.PendingIntent
+import android.content.pm.ServiceInfo
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.widget.TextView
@@ -44,8 +45,9 @@ import kotlin.math.abs
  *                  on; see research/07-recommendations.md.
  *  - drag        → reposition (disabled once a hold-to-talk take is live)
  *
- * Recording itself runs in RewriteActivity (a visible activity legitimately holds
- * the mic on Android 14; a background overlay cannot start a mic service). While
+ * Recording runs in [Dictation], in this process, with this service promoted to a microphone
+ * foreground service. RewriteActivity only flashes on screen to make that promotion legal
+ * (Android grants it to an app that is visible), so the user can keep using the phone. While
  * recording and processing, the activity calls back here to switch the bubble's animated
  * state (see [FlowBubbleView]).
  */
@@ -125,7 +127,9 @@ class BubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         try {
-            startForeground(NOTIF_ID, buildNotification())
+            // Explicitly *not* the microphone type: that one may only be taken while VoiceFlow is
+            // on screen, and this can run at boot. Dictation upgrades to it (enterMicForeground).
+            startForegroundAs(idleFgsType())
         } catch (e: Exception) {
             android.util.Log.e("BubbleService", "startForeground failed", e)
         }
@@ -204,6 +208,34 @@ class BubbleService : Service() {
         OpenWisprAccessibilityService.reevaluate()
     }
 
+    private fun idleFgsType(): Int =
+        if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+
+    private fun startForegroundAs(type: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIF_ID, buildNotification(), type)
+        else startForeground(NOTIF_ID, buildNotification())
+    }
+
+    /**
+     * Add the microphone to this foreground service so a dictation keeps recording while the user
+     * scrolls, switches apps, etc. Android only allows this while one of our activities is
+     * visible, which is why dictation starts through a brief, invisible RewriteActivity.
+     * Throws if Android refuses.
+     */
+    fun enterMicForeground() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            startForegroundAs(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or idleFgsType())
+        }
+    }
+
+    /** Drop the microphone type again once the dictation is over. */
+    fun exitMicForeground() {
+        // Before Android 14 a type-less restart would re-claim every manifest type, microphone
+        // included, from the background; leaving it is harmless there (the mic is only in use
+        // while AudioRecord is running).
+        if (Build.VERSION.SDK_INT >= 34) runCatching { startForegroundAs(idleFgsType()) }
+    }
+
     /** Rebuild the ongoing notification, e.g. after the app language changes. */
     fun refreshNotification() {
         runCatching { getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification()) }
@@ -250,7 +282,7 @@ class BubbleService : Service() {
         bubbleSize = size
         idleOpacity = BubblePrefs.opacity(this)
         val frame = FrameLayout(this)
-        val disc = FlowBubbleView(this).apply { alpha = idleOpacity }
+        val disc = FlowBubbleView(this).apply { alpha = idleOpacity; baseSizePx = size }
         frame.addView(disc, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -347,7 +379,8 @@ class BubbleService : Service() {
                     }
                     params.x = startX + dx.toInt()
                     params.y = startY + dy.toInt()
-                    if (moved) {
+                    // No "Zzz" target mid-dictation: moving the bubble while recording just moves it.
+                    if (moved && !recording && !processing) {
                         overDismiss = isOverDismiss()
                         showDismiss(overDismiss)
                         if (overDismiss) {
@@ -390,7 +423,9 @@ class BubbleService : Service() {
                     if (moved) {
                         // A deliberate drag is the user's new home, keyboard up or not.
                         homeY = null
-                        BubblePrefs.setPosition(this@BubbleService, params.x, params.y)
+                        // Saved as the resting-size position, even if dragged while enlarged.
+                        val inset = (params.width - bubbleSize) / 2
+                        BubblePrefs.setPosition(this@BubbleService, params.x + inset, params.y + inset)
                     }
                     if (!moved) onTap()
                     true
@@ -502,10 +537,28 @@ class BubbleService : Service() {
 
     // ---- called from RewriteActivity (same process / main thread) ----
 
+    /**
+     * Grow or shrink the overlay window around the same center. While recording it's larger so
+     * the ripples aren't clipped; the disc itself stays the same size (FlowBubbleView.baseSizePx).
+     */
+    private fun setWindowSize(size: Int) {
+        val c = container ?: return
+        if (params.width == size) return
+        val delta = (size - params.width) / 2
+        params.x -= delta
+        params.y -= delta
+        params.width = size
+        params.height = size
+        try { wm.updateViewLayout(c, params) } catch (_: Exception) {}
+    }
+
+    private fun recordingWindowSize() = (104 * resources.displayMetrics.density).toInt()
+
     fun showRecording() {
         recording = true
         processing = false
         ensureVisible()
+        setWindowSize(recordingWindowSize())
         body?.switchTo(FlowBubbleView.State.RECORDING)
         applyOpacity()
     }
@@ -519,6 +572,7 @@ class BubbleService : Service() {
         recording = false
         processing = true
         ensureVisible()
+        setWindowSize(bubbleSize)
         body?.switchTo(FlowBubbleView.State.PROCESSING)
         applyOpacity()
     }
@@ -526,6 +580,7 @@ class BubbleService : Service() {
     fun showIdle() {
         recording = false
         processing = false
+        setWindowSize(bubbleSize)
         body?.switchTo(FlowBubbleView.State.IDLE)
         applyOpacity()
         applyGating(animate = true) // re-hide if gated and no field is focused
@@ -668,6 +723,8 @@ class BubbleService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // The service going away ends any dictation in flight (its recording stays retryable).
+        Dictation.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         container?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
         dismissView?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }

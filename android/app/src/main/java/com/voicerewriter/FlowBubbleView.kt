@@ -53,6 +53,14 @@ class FlowBubbleView(context: Context) : View(context) {
     private var levelTarget = 0f
     private var level = 0f
 
+    /**
+     * The window size the disc is designed for. While recording the service grows the window so
+     * the ripples have room; the disc keeps this size so the bubble doesn't jump.
+     */
+    var baseSizePx = 0
+    /** Disc radius used for this frame. */
+    private var discR = 0f
+
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -139,11 +147,13 @@ class FlowBubbleView(context: Context) : View(context) {
         if (half <= 0f) return
         val cx = width / 2f
         val cy = height / 2f
-        val r = half * DISC
+        val r = (if (baseSizePx > 0) baseSizePx / 2f else half) * DISC
+        discR = r
         ensureShaders(cx, cy, half, r)
 
-        // Ease the live level so the disc breathes rather than jitters.
-        level += (levelTarget - level) * 0.25f
+        // Ease the live level: quick to rise with the voice, slow to fall, so it breathes
+        // rather than jitters.
+        level += (levelTarget - level) * (if (levelTarget > level) 0.45f else 0.12f)
 
         val t = (now() % 100_000L) / 1000f // seconds, wraps far beyond any session
         val mix = ((now() - fadeStart) / FADE_MS).coerceIn(0f, 1f)
@@ -165,19 +175,34 @@ class FlowBubbleView(context: Context) : View(context) {
                 drawMic(canvas, cx, cy, r, alpha)
             }
             State.RECORDING -> {
-                // Two rings rippling out from the disc edge, plus a steady halo.
-                stroke.shader = null
-                for (k in 0..1) {
-                    val p = ((t / 1.6f) + k * 0.5f) % 1f
-                    val rr = r + (half - r) * p
-                    stroke.strokeWidth = half * 0.06f * (1f - p * 0.5f)
-                    stroke.color = withAlpha(RING, alpha * (1f - p) * 0.85f)
+                // A soft halo that swells with the voice.
+                val haloR = r * (1.45f + level * 0.45f)
+                fill.shader = RadialGradient(
+                    cx, cy, haloR,
+                    intArrayOf(withAlpha(CYAN, alpha * (0.40f + level * 0.25f)), withAlpha(CYAN, alpha * 0.12f), Color.TRANSPARENT),
+                    floatArrayOf(0.55f, 0.8f, 1f), Shader.TileMode.CLAMP,
+                )
+                canvas.drawCircle(cx, cy, haloR, fill)
+                fill.shader = null
+                // Three rings rippling out, eased so they leave the disc fast and settle softly;
+                // they brighten while you speak.
+                for (k in 0..2) {
+                    val p = ((t / 2.1f) + k / 3f) % 1f
+                    val e = 1f - (1f - p) * (1f - p)
+                    val rr = r * 1.04f + (half - r * 1.04f) * e
+                    stroke.shader = null
+                    stroke.strokeWidth = r * 0.07f * (1f - p * 0.6f)
+                    val a = (1f - p) * (1f - p) * (0.45f + level * 0.55f)
+                    stroke.color = withAlpha(RING, alpha * a)
                     canvas.drawCircle(cx, cy, rr, stroke)
                 }
-                fill.shader = null
-                fill.color = withAlpha(RING, alpha * 0.28f)
-                canvas.drawCircle(cx, cy, r * (1.08f + level * 0.10f), fill)
-                val breathe = r * (1f + level * 0.07f)
+                // A thin mint "live" ring hugging the disc, tracking the voice level.
+                stroke.strokeWidth = r * 0.07f
+                stroke.color = withAlpha(MINT, alpha * (0.25f + level * 0.6f))
+                canvas.drawCircle(cx, cy, r * (1.06f + level * 0.08f), stroke)
+                // The disc breathes gently even in silence, and more with the voice.
+                val idle = 0.018f * sin(t * 2f * PI.toFloat() / 1.8f)
+                val breathe = r * (1f + idle + level * 0.06f)
                 drawDisc(canvas, cx, cy, breathe, alpha)
                 drawMic(canvas, cx, cy, breathe, alpha)
             }
@@ -232,7 +257,7 @@ class FlowBubbleView(context: Context) : View(context) {
         fill.shader = discShader
         fill.alpha = (alpha * 255).toInt()
         canvas.save()
-        val k = r / (min(width, height) / 2f * DISC)
+        val k = r / discR
         canvas.scale(k, k, cx, cy) // the shader is laid out for the base radius
         canvas.drawCircle(cx, cy, r / k, fill)
         canvas.restore()

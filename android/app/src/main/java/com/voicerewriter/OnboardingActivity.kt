@@ -269,6 +269,9 @@ private fun OnboardingScreen(onLaunchDictation: () -> Unit, onGoHome: () -> Unit
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs) }
     }
+    // The dictation now finishes in the background (tap the bubble to end it), usually while
+    // this screen is already back in front, so also pick the result up the moment it lands.
+    LaunchedEffect(Unit) { Dictation.delivered.collect { if (it > 0) captureTryResult() } }
 
     fun next() { step = (step + 1).coerceAtMost(LAST_STEP) }
     fun back() { step = (step - 1).coerceAtLeast(0) }
@@ -879,7 +882,7 @@ private fun TryItStep(
                 Text(tr("Pruébalo una vez", "Try it once"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = cs.onBackground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    tr("Toca el círculo y lee esto en voz alta, con todo y titubeos. Las muletillas son justo la idea.", "Tap the circle and read this aloud, mistakes and all. The filler and the mid-sentence correction are the point."),
+                    tr("Toca el círculo, lee esto en voz alta con todo y titubeos, y al terminar toca la burbuja. Las muletillas son justo la idea.", "Tap the circle, read this aloud mistakes and all, then tap the bubble when you're done. The filler and the mid-sentence correction are the point."),
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
