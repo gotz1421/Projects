@@ -159,6 +159,17 @@ object Dictation {
         transcribe(s, samples, saved?.id)
     }
 
+    /** The user tapped the ✕ beside the bubble: drop the take, nothing is inserted or saved. */
+    fun userCancel() {
+        if (_phase.value != Phase.RECORDING) return
+        ampJob?.cancel()
+        BubbleService.recordingStopper = null
+        recorder?.cancel(); recorder = null
+        _phase.value = Phase.IDLE
+        BubbleService.instance?.showCancelled()
+        BubbleService.instance?.exitMicForeground()
+    }
+
     /** Throw the take away (e.g. the service is going down). */
     fun cancel() {
         ampJob?.cancel(); work?.cancel()
@@ -282,11 +293,13 @@ object Dictation {
         pendingId?.let { PendingAudio.release(it) }
         pendingId = null
         toast(
-            if (saved) message + " " + tr("La grabación quedó guardada en Inicio para reintentar.",
-                "The recording is saved on Home so you can retry.")
+            if (saved) message + " " + tr("La grabación también quedó guardada en Inicio.",
+                "The recording is also saved on Home.")
             else message,
         )
         finishUp()
+        // "Retry" beside the bubble starts listening again, for a smooth second attempt.
+        BubbleService.instance?.showRetry()
     }
 
     private fun finishUp() {

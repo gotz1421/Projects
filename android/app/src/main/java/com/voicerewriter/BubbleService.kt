@@ -117,6 +117,13 @@ class BubbleService : Service() {
     /** The user's own y, remembered while the bubble is lifted above the keyboard. */
     private var homeY: Int? = null
 
+    // Side button stuck to the bubble's left: a small ✕ while recording (cancel), or
+    // "Reintentar" after a failed dictation (start listening again).
+    private var sideView: View? = null
+    private var sideParams: WindowManager.LayoutParams? = null
+    private var retryOffered = false
+    private val hideRetry = Runnable { if (retryOffered) { retryOffered = false; hideSide(); applyGating(animate = true) } }
+
     // Nap: dropping the bubble on the "Zzz" target hides it for a few minutes, even while typing.
     private var snoozedUntil = 0L
     private val wake = Runnable { endSnooze() }
@@ -390,7 +397,7 @@ class BubbleService : Service() {
                             params.y = (cy - bubbleSize / 2f).toInt()
                         }
                     }
-                    container?.let { wm.updateViewLayout(it, params) }
+                    updateBubbleLayout()
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -414,7 +421,7 @@ class BubbleService : Service() {
                         overDismiss = false
                         params.x = startX
                         params.y = startY
-                        container?.let { wm.updateViewLayout(it, params) }
+                        updateBubbleLayout()
                         snooze()
                         return@setOnTouchListener true
                     }
@@ -520,6 +527,7 @@ class BubbleService : Service() {
         // While the last take is still being transcribed, a tap must not start a second one
         // that would race it for the same text field.
         if (processing) return
+        if (retryOffered) { retryOffered = false; mainHandler.removeCallbacks(hideRetry); hideSide() }
         vibrate(longArrayOf(0, 18))
         val stop = recordingStopper
         if (stop != null) mainHandler.post(stop) // stop the in-progress recording
@@ -549,7 +557,7 @@ class BubbleService : Service() {
         params.y -= delta
         params.width = size
         params.height = size
-        try { wm.updateViewLayout(c, params) } catch (_: Exception) {}
+        updateBubbleLayout()
     }
 
     private fun recordingWindowSize() = (104 * resources.displayMetrics.density).toInt()
@@ -557,8 +565,11 @@ class BubbleService : Service() {
     fun showRecording() {
         recording = true
         processing = false
+        retryOffered = false
+        mainHandler.removeCallbacks(hideRetry)
         ensureVisible()
         setWindowSize(recordingWindowSize())
+        showSide(cancelButton())
         body?.switchTo(FlowBubbleView.State.RECORDING)
         applyOpacity()
     }
@@ -572,6 +583,7 @@ class BubbleService : Service() {
         recording = false
         processing = true
         ensureVisible()
+        hideSide()
         setWindowSize(bubbleSize)
         body?.switchTo(FlowBubbleView.State.PROCESSING)
         applyOpacity()
@@ -580,6 +592,7 @@ class BubbleService : Service() {
     fun showIdle() {
         recording = false
         processing = false
+        if (!retryOffered) hideSide()
         setWindowSize(bubbleSize)
         body?.switchTo(FlowBubbleView.State.IDLE)
         applyOpacity()
@@ -592,7 +605,128 @@ class BubbleService : Service() {
     private fun gateActive(): Boolean = gateSetting && OpenWisprAccessibilityService.isEnabled
 
     private fun shouldShow(): Boolean =
-        recording || processing || (!snoozed() && (fieldFocused || !gateActive()))
+        recording || processing || retryOffered || (!snoozed() && (fieldFocused || !gateActive()))
+
+    /** The user tapped ✕: the take was thrown away. A short "cancelled" animation, then rest. */
+    fun showCancelled() {
+        recording = false
+        processing = false
+        hideSide()
+        setWindowSize(bubbleSize)
+        vibrate(longArrayOf(0, 25, 60, 25))
+        body?.switchTo(FlowBubbleView.State.CANCELLED)
+        applyOpacity()
+        mainHandler.postDelayed({ if (!recording && !processing) showIdle() }, 750)
+    }
+
+    /**
+     * A dictation failed (no audio, no connection, …): offer "Retry" next to the bubble for a
+     * few seconds. Retry starts listening again, exactly like tapping the bubble.
+     */
+    fun showRetry() {
+        retryOffered = true
+        ensureVisible()
+        showSide(retryButton())
+        mainHandler.removeCallbacks(hideRetry)
+        mainHandler.postDelayed(hideRetry, 8_000)
+    }
+
+    // ---- the side button (✕ / Reintentar) ----
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun sideBackground(): android.graphics.drawable.GradientDrawable =
+        android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(20).toFloat()
+            setColor(0xEB0B1929.toInt())
+            setStroke(dp(1), 0x6622D3EE)
+        }
+
+    private fun cancelButton(): View = TextView(this).apply {
+        text = "✕"
+        setTextColor(0xFFFFFFFF.toInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        typeface = Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER
+        background = sideBackground()
+        contentDescription = tr("Cancelar dictado", "Cancel dictation")
+        layoutParams = ViewGroup.LayoutParams(dp(26), dp(26))
+        setOnClickListener { Dictation.userCancel() }
+    }
+
+    private fun retryButton(): View = TextView(this).apply {
+        text = tr("↻ Reintentar", "↻ Retry")
+        setTextColor(0xFF22D3EE.toInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        typeface = Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER
+        background = sideBackground()
+        setPadding(dp(12), 0, dp(12), 0)
+        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30))
+        setOnClickListener {
+            retryOffered = false
+            mainHandler.removeCallbacks(hideRetry)
+            hideSide()
+            vibrate(longArrayOf(0, 18))
+            launchRewrite(Defaults.MODE_DICTATE)
+        }
+    }
+
+    private fun showSide(view: View) {
+        removeSideNow()
+        val lp = view.layoutParams ?: ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        view.measure(
+            if (lp.width > 0) View.MeasureSpec.makeMeasureSpec(lp.width, View.MeasureSpec.EXACTLY)
+            else View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(lp.height, View.MeasureSpec.EXACTLY),
+        )
+        val p = WindowManager.LayoutParams(
+            view.measuredWidth, view.measuredHeight, overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        sideParams = p
+        placeSide()
+        view.alpha = 0f; view.scaleX = 0.5f; view.scaleY = 0.5f
+        try { wm.addView(view, p) } catch (_: Exception) { return }
+        sideView = view
+        view.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180).start()
+    }
+
+    /** Stick the side button to the disc's left edge (or its right, near the screen's left edge). */
+    private fun placeSide() {
+        val p = sideParams ?: return
+        val discR = bubbleSize / 2f * 0.72f
+        val cx = params.x + params.width / 2f
+        val cy = params.y + params.height / 2f
+        val gap = dp(4)
+        var x = (cx - discR - gap - p.width).toInt()
+        if (x < 0) x = (cx + discR + gap).toInt()
+        p.x = x
+        p.y = (cy - p.height / 2f).toInt()
+    }
+
+    private fun hideSide() {
+        val v = sideView ?: return
+        sideView = null
+        v.animate().alpha(0f).scaleX(0.5f).scaleY(0.5f).setDuration(150)
+            .withEndAction { try { wm.removeView(v) } catch (_: Exception) {} }.start()
+    }
+
+    private fun removeSideNow() {
+        val v = sideView ?: return
+        sideView = null
+        v.animate().cancel()
+        try { wm.removeView(v) } catch (_: Exception) {}
+    }
+
+    /** Apply [params] to the bubble window and keep the side button stuck to it. */
+    private fun updateBubbleLayout() {
+        container?.let { c -> try { wm.updateViewLayout(c, params) } catch (_: Exception) {} }
+        val v = sideView ?: return
+        placeSide()
+        sideParams?.let { p -> try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
+    }
 
     /**
      * Called by the accessibility service when the user can or can't type: a host app's
@@ -656,7 +790,7 @@ class BubbleService : Service() {
         homeY = if (top != null && targetY != baseY) baseY else null
         if (params.y == targetY) return
         params.y = targetY
-        try { wm.updateViewLayout(c, params) } catch (_: Exception) {}
+        updateBubbleLayout()
     }
 
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
@@ -691,6 +825,7 @@ class BubbleService : Service() {
             if (animate && c.alpha < 1f) c.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(170).start()
             else { c.alpha = 1f; c.scaleX = 1f; c.scaleY = 1f }
         } else {
+            hideSide()
             if (!isShown()) { c.visibility = View.GONE; return }
             if (animate) {
                 c.animate().alpha(0f).scaleX(0.6f).scaleY(0.6f).setDuration(140)
@@ -727,6 +862,7 @@ class BubbleService : Service() {
         Dictation.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         container?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
+        removeSideNow()
         dismissView?.let { v -> try { wm.removeView(v) } catch (_: Exception) {} }
         container = null
         body = null

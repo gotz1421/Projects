@@ -31,7 +31,7 @@ import kotlin.math.sin
  */
 class FlowBubbleView(context: Context) : View(context) {
 
-    enum class State { IDLE, RECORDING, PROCESSING }
+    enum class State { IDLE, RECORDING, PROCESSING, CANCELLED }
 
     private companion object {
         val CYAN = Color.parseColor("#22D3EE")
@@ -112,7 +112,7 @@ class FlowBubbleView(context: Context) : View(context) {
     private fun fading(): Boolean = now() - fadeStart < FADE_MS
 
     private fun syncClock() {
-        val animate = isAttachedToWindow && (state != State.IDLE || fading())
+        val animate = isAttachedToWindow && (state != State.IDLE || fading() || state == State.CANCELLED)
         if (animate && !clock.isStarted) clock.start()
         if (!animate && clock.isStarted) clock.cancel()
     }
@@ -205,6 +205,25 @@ class FlowBubbleView(context: Context) : View(context) {
                 val breathe = r * (1f + idle + level * 0.06f)
                 drawDisc(canvas, cx, cy, breathe, alpha)
                 drawMic(canvas, cx, cy, breathe, alpha)
+            }
+            State.CANCELLED -> {
+                // "Cancelled": a quick side-to-side shake that dies out while the disc turns
+                // slate, shrinks a touch and shows an ✕ — then the service returns it to rest.
+                val since = (now() - fadeStart) / 1000f
+                val shake = sin(since * 38f) * r * 0.10f * (1f - (since / 0.45f)).coerceIn(0f, 1f)
+                val k = 1f - 0.12f * (since / 0.3f).coerceIn(0f, 1f)
+                canvas.save()
+                canvas.translate(shake, 0f)
+                fill.shader = null
+                fill.color = withAlpha(Color.parseColor("#475569"), alpha)
+                canvas.drawCircle(cx, cy, r * k, fill)
+                stroke.shader = null
+                stroke.color = withAlpha(Color.WHITE, alpha)
+                stroke.strokeWidth = r * 0.14f
+                val a = r * 0.32f * k
+                canvas.drawLine(cx - a, cy - a, cx + a, cy + a, stroke)
+                canvas.drawLine(cx + a, cy - a, cx - a, cy + a, stroke)
+                canvas.restore()
             }
             State.PROCESSING -> {
                 drawGlow(canvas, cx, cy, half, alpha * 0.8f)

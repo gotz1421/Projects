@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
@@ -111,6 +112,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
     var showA11yConsent by remember { mutableStateOf(false) }
     var notifOn by remember { mutableStateOf(true) }
     var micGranted by remember { mutableStateOf(false) }
+    var batteryUnrestricted by remember { mutableStateOf(SetupUtils.batteryUnrestricted(context)) }
 
     // LLM (rewrite / polish model)
     var provider by remember { mutableStateOf(Defaults.DEFAULT_PROVIDER) }
@@ -168,6 +170,12 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
         provider = s.provider; model = s.model; customEndpoint = s.customEndpoint; apiKey = s.apiKey
         voice = s.voice; antiAI = s.antiAI; temperature = s.temperature.toFloat()
         sttProvider = s.sttProvider; sttEndpoint = s.sttEndpoint; sttKey = s.sttKey; sttModel = s.sttModel
+        // The active keys live in Settings; mirror them into the per-provider store once so
+        // switching providers and back finds them.
+        if (s.sttKey.isNotBlank() && ProviderKeys.get(context, ProviderKeys.STT, s.sttProvider).isBlank())
+            ProviderKeys.set(context, ProviderKeys.STT, s.sttProvider, s.sttKey)
+        if (s.apiKey.isNotBlank() && ProviderKeys.get(context, ProviderKeys.LLM, s.provider).isBlank())
+            ProviderKeys.set(context, ProviderKeys.LLM, s.provider, s.apiKey)
         defaultMode = s.defaultMode
         deterministicCleanup = s.deterministicCleanup; polishLevel = s.polishLevel
         vadAutoStop = s.vadAutoStop; bubbleOnlyOnFields = s.bubbleOnlyOnFields
@@ -188,6 +196,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
         val obs = LifecycleEventObserver { _, e ->
             if (e == Lifecycle.Event.ON_RESUME) {
                 a11yEnabled = SetupUtils.accessibilityEnabled(context)
+                batteryUnrestricted = SetupUtils.batteryUnrestricted(context)
                 notifOn = SetupUtils.notificationsGranted(context)
                 micGranted = SetupUtils.micGranted(context)
                 // The bubble is how VoiceFlow is used, so it's always on once overlays are allowed.
@@ -370,7 +379,9 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                             options = listOf("local" to tr("En el teléfono", "On-device"), "groq" to "Groq", "openai" to "OpenAI", "custom" to tr("Otro", "Custom")),
                             selected = sttProvider,
                             onSelect = {
+                                if (sttProvider != "local") ProviderKeys.set(context, ProviderKeys.STT, sttProvider, sttKey)
                                 sttProvider = it
+                                if (it != "local") sttKey = ProviderKeys.get(context, ProviderKeys.STT, it)
                                 if (it != "custom" && it != "local") {
                                     val d = Defaults.STT_PROVIDERS[it]?.defaultModel.orEmpty()
                                     if (d.isNotEmpty()) sttModel = d
@@ -408,9 +419,19 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     } else {
                         Divider()
                         Padded {
+                            ActiveModelBadge(
+                                tr("En uso para transcribir", "In use for transcription"),
+                                "${Defaults.STT_PROVIDERS[sttProvider]?.label ?: sttProvider} · ${sttModel.ifBlank { "—" }}",
+                                ready = sttKey.isNotBlank(),
+                            )
+                            Spacer(Modifier.height(12.dp))
                             Label(tr("Clave de API", "API key"))
                             Spacer(Modifier.height(8.dp))
-                            KeyField(sttKey, Defaults.STT_PROVIDERS[sttProvider]?.let { keyPlaceholder(sttProvider) } ?: "key") { sttKey = it; persist() }
+                            SecretField(sttKey, keyPlaceholder(sttProvider)) {
+                                sttKey = it
+                                ProviderKeys.set(context, ProviderKeys.STT, sttProvider, it)
+                                persist()
+                            }
                             if (sttProvider == "custom") {
                                 Spacer(Modifier.height(10.dp))
                                 KeyField(sttEndpoint, tr("URL del endpoint de transcripción", "Transcription endpoint URL")) { sttEndpoint = it; persist() }
@@ -494,12 +515,27 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                                             Segment(
                                                 options = Defaults.PROVIDERS.values.filter { it.id != "local" }.map { it.id to it.label },
                                                 selected = if (provider == "local") "" else provider,
-                                                onSelect = { p -> provider = p; Defaults.PROVIDERS[p]?.defaultModel?.takeIf { it.isNotEmpty() }?.let { model = it }; persist() },
+                                                onSelect = { p ->
+                                                    if (provider != "local") ProviderKeys.set(context, ProviderKeys.LLM, provider, apiKey)
+                                                    provider = p
+                                                    apiKey = ProviderKeys.get(context, ProviderKeys.LLM, p)
+                                                    Defaults.PROVIDERS[p]?.defaultModel?.takeIf { it.isNotEmpty() }?.let { model = it }
+                                                    persist()
+                                                },
                                             )
                                             if (provider != "local") {
+                                                ActiveModelBadge(
+                                                    tr("En uso para pulir", "In use for polish"),
+                                                    "${Defaults.PROVIDERS[provider]?.label ?: provider} · ${model.ifBlank { "—" }}",
+                                                    ready = apiKey.isNotBlank(),
+                                                )
                                                 if (provider == "custom") KeyField(customEndpoint, tr("URL del endpoint", "Endpoint URL")) { customEndpoint = it; persist() }
                                                 KeyField(model, tr("ID del modelo", "Model id")) { model = it; persist() }
-                                                KeyField(apiKey, tr("Clave de API", "API key")) { apiKey = it; persist() }
+                                                SecretField(apiKey, tr("Clave de API", "API key")) {
+                                                    apiKey = it
+                                                    ProviderKeys.set(context, ProviderKeys.LLM, provider, it)
+                                                    persist()
+                                                }
                                             }
                                         }
                                     }
@@ -626,36 +662,20 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
             // ---------------- RELIABILITY ----------------
             Section(tr("Confiabilidad", "Reliability")) {
                 Card {
-                    NavRow(tr("Inicio automático y batería", "Auto-start & battery"), tr("Para Samsung, Xiaomi, OnePlus, Oppo: elige \"Sin restricciones\"", "For Samsung, Xiaomi, OnePlus, Oppo: choose \"Unrestricted\"")) {
-                        val intent = SetupUtils.oemAutoStartIntents().firstOrNull { it.resolveActivity(context.packageManager) != null }
-                            ?: SetupUtils.appInfoIntent(context)
-                        runCatching { context.startActivity(intent) }
+                    // Straight to VoiceFlow's own battery setting, so Android never puts the bubble
+                    // to sleep. Once it's unrestricted, the row shows it and opens App info → Battery.
+                    NavRow(
+                        tr("Batería sin restricciones", "Unrestricted battery"),
+                        if (batteryUnrestricted) tr("✓ Activado: Android no detendrá la burbuja", "✓ On: Android won't stop the bubble")
+                        else tr("Toca para permitir que VoiceFlow funcione siempre en segundo plano", "Tap to let VoiceFlow always run in the background"),
+                    ) {
+                        runCatching { context.startActivity(SetupUtils.batteryIntent(context)) }
+                            .onFailure { runCatching { context.startActivity(SetupUtils.appInfoIntent(context)) } }
                     }
                 }
             }
 
             // ---------------- GENERAL ----------------
-            // ---------------- FEEDBACK ----------------
-            // There was no way to reach us from inside the app at all, so the only channel was a
-            // Play review, which we can reply to but not ask questions in. Both rows prefill the
-            // version/device details and then hand off to the user's own mail app or browser;
-            // nothing is transmitted by us.
-            Section(tr("Comentarios", "Feedback")) {
-                Card {
-                    NavRow(tr("Enviar comentarios", "Send feedback"), tr("Al equipo original de OpenWispr", "To the original OpenWispr team")) {
-                        launchOrNotify(context, Feedback.emailIntent(context), tr("No hay app de correo. Escribe a ${Feedback.EMAIL}", "No email app found. Write to ${Feedback.EMAIL}"))
-                    }
-                    Divider()
-                    NavRow(tr("Reportar un problema", "Report a problem"), tr("Abre un issue en GitHub", "Open an issue on GitHub")) {
-                        launchOrNotify(context, Feedback.issueIntent(context), tr("No se pudo abrir el navegador.", "Couldn't open a browser."))
-                    }
-                    Divider()
-                    NavRow(tr("Calificar OpenWispr", "Rate OpenWispr"), tr("El proyecto original en Google Play", "The original project on Google Play")) {
-                        launchOrNotify(context, Feedback.playListingIntent(context), tr("No se pudo abrir Google Play.", "Couldn't open Google Play."))
-                    }
-                }
-            }
-
             Section(tr("General", "General")) {
                 Card {
                     NavRow(tr("Repetir la introducción", "Replay onboarding"), tr("Volver a ver la configuración inicial", "Walk through setup again")) { context.startActivity(OnboardingActivity.intent(context)) }
@@ -663,9 +683,10 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                     // remember: this is a binder call into PackageManager, and the version can't
                     // change while the screen is up.
                     val version = remember { appVersion(context) }
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(tr("Versión", "Version"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                        Text("$version · " + tr("código abierto", "open source"), style = MonoEyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(tr("Versión", "Version"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                        Text("VoiceFlow $version · " + tr("código abierto", "open source"),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -962,6 +983,75 @@ private fun KeyField(value: String, placeholder: String, onChange: (String) -> U
                 inner()
             },
         )
+    }
+}
+
+/**
+ * An API key that, once saved, is shown locked and masked ("gsk_…a1b2") with a "Saved" mark.
+ * Changing it takes a deliberate "Edit" and a "Save", so a stray tap can't eat a character.
+ */
+@Composable
+private fun SecretField(value: String, placeholder: String, onSave: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var editing by remember(value.isBlank()) { mutableStateOf(value.isBlank()) }
+    var draft by remember(editing) { mutableStateOf(value) }
+    androidx.compose.animation.AnimatedContent(targetState = editing, label = "secret") { isEditing ->
+        if (!isEditing) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(cs.primaryContainer)
+                    .padding(horizontal = 13.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(Icons.Default.Lock, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(ProviderKeys.mask(value), style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
+                    Text(tr("✓ Guardada", "✓ Saved"), style = MaterialTheme.typography.bodySmall, color = Color(0xFF059669))
+                }
+                Text(tr("Editar", "Edit"), style = MaterialTheme.typography.titleSmall, color = cs.primary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { editing = true }.padding(8.dp))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyField(draft, placeholder) { draft = it }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    if (value.isNotBlank()) {
+                        Text(tr("Cancelar", "Cancel"), style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant,
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { editing = false }.padding(10.dp))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier.clip(RoundedCornerShape(9.dp))
+                            .background(if (draft.isNotBlank()) cs.primary else cs.surfaceVariant)
+                            .clickable(enabled = draft.isNotBlank()) { onSave(draft.trim()); editing = false }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text(tr("Guardar", "Save"), style = MaterialTheme.typography.titleSmall,
+                            color = if (draft.isNotBlank()) cs.onPrimary else cs.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** "In use" line: which provider and model is actually doing the work right now. */
+@Composable
+private fun ActiveModelBadge(title: String, detail: String, ready: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+            .border(1.5.dp, if (ready) Color(0xFF10B981) else cs.outline, RoundedCornerShape(11.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(9.dp).clip(CircleShape).background(if (ready) Color(0xFF10B981) else cs.outline))
+        Column(Modifier.weight(1f)) {
+            Text(if (ready) title else tr("Falta la clave de API", "API key missing"),
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+        }
     }
 }
 

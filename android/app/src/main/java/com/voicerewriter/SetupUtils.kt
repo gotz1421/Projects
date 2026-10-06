@@ -38,6 +38,23 @@ object SetupUtils {
         return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
     }
 
+    /** Whether Android exempts VoiceFlow from battery optimization ("Unrestricted"). */
+    fun batteryUnrestricted(ctx: Context): Boolean {
+        val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        return pm.isIgnoringBatteryOptimizations(ctx.packageName)
+    }
+
+    /**
+     * Where to send the user for battery: the system "let this app always run in the background?"
+     * prompt while it's still restricted, VoiceFlow's App info (Battery) once it isn't.
+     */
+    @android.annotation.SuppressLint("BatteryLife")
+    fun batteryIntent(ctx: Context): Intent =
+        if (!batteryUnrestricted(ctx)) Intent(
+            AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:${ctx.packageName}"),
+        ) else appInfoIntent(ctx)
+
     // ---- bubble service ----
 
     /**
