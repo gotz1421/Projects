@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Legacy splash (API < 31): deep navy with the centered white microphone. -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/splash_bg" />
-    <item android:gravity="center" android:width="140dp" android:height="140dp">
-        <bitmap android:gravity="center" android:src="@drawable/splash_logo" />
-    </item>
-</layer-list>

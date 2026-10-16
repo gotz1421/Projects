@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cotizador Vidriera Gómez</title>
+  <meta name="description" content="Cotizador para vidriera y aluminio: clientes, productos, cotizaciones y exportación a PDF.">
+  <meta name="theme-color" content="#0f4c5c">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="32" height="32">
+        <div>
+          <strong id="brand-name">Vidriera Gómez</strong>
+          <span>Cotizador</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Secciones">
+        <button class="nav-btn active" data-view="cotizar"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z M14 2v6h6 M9 13h8 M9 17h6"/></svg><span>Cotizar</span></button>
+        <button class="nav-btn" data-view="historial"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5 M12 7v5l3 3"/></svg><span>Historial</span></button>
+        <button class="nav-btn" data-view="clientes"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.9 M16 3.1a4 4 0 0 1 0 7.8"/></svg><span>Clientes</span></button>
+        <button class="nav-btn" data-view="productos"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z M3 8v8l9 5 9-5V8 M12 13v8"/></svg><span>Productos</span></button>
+        <button class="nav-btn" data-view="ajustes"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustes</span></button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- COTIZAR -->
+      <section class="view active" id="view-cotizar">
+        <div class="view-head">
+          <div>
+            <h1 id="q-title">Nueva cotización</h1>
+            <p class="muted" id="q-sub">Se guarda automáticamente como borrador</p>
+          </div>
+          <button class="btn ghost" id="btn-new">+ Nueva</button>
+        </div>
+
+        <div class="quote-grid">
+          <div class="quote-main">
+            <div class="card">
+              <div class="row-2">
+                <label class="field">
+                  <span># Cotización</span>
+                  <input id="q-folio" readonly>
+                </label>
+                <label class="field">
+                  <span>Fecha</span>
+                  <input type="date" id="q-date">
+                </label>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h2>Cliente</h2>
+                <button class="btn small ghost" id="btn-quick-client">+ Nuevo cliente</button>
+              </div>
+              <label class="field">
+                <span>Selecciona un cliente</span>
+                <select id="q-client"></select>
+              </label>
+              <dl class="client-info" id="q-client-info"></dl>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h2>Productos</h2>
+                <span class="muted small" id="items-count"></span>
+              </div>
+              <div class="items-head" aria-hidden="true">
+                <span>Producto</span><span>Descripción</span><span class="num">Valor unitario</span><span class="num">Cantidad</span><span class="num">Total</span><span></span>
+              </div>
+              <div id="q-items"></div>
+              <button class="btn block outline" id="btn-add-item">+ Agregar producto</button>
+            </div>
+          </div>
+
+          <aside class="quote-side">
+            <div class="card totals">
+              <div class="t-row"><span>Subtotal</span><strong id="t-sub">$0.00</strong></div>
+              <div class="t-row"><span id="t-iva-label">IVA (16%)</span><strong id="t-iva">$0.00</strong></div>
+              <div class="t-row total"><span>Total</span><strong id="t-total">$0.00</strong></div>
+              <div class="side-actions">
+                <button class="btn primary block" id="btn-export">Exportar / PDF</button>
+                <button class="btn block" id="btn-save">Guardar cotización</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="mobile-bar">
+          <div><span class="muted small">Total</span><strong id="m-total">$0.00</strong></div>
+          <button class="btn" id="m-save">Guardar</button>
+          <button class="btn primary" id="m-export">Exportar</button>
+        </div>
+      </section>
+
+      <!-- HISTORIAL -->
+      <section class="view" id="view-historial">
+        <div class="view-head">
+          <div><h1>Historial</h1><p class="muted">Cotizaciones guardadas</p></div>
+        </div>
+        <input type="search" class="search" id="h-search" placeholder="Buscar por folio o cliente…">
+        <div class="list" id="h-list"></div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section class="view" id="view-clientes">
+        <div class="view-head">
+          <div><h1>Clientes</h1><p class="muted" id="c-count"></p></div>
+          <button class="btn primary" id="btn-add-client">+ Cliente</button>
+        </div>
+        <input type="search" class="search" id="c-search" placeholder="Buscar cliente…">
+        <div class="list" id="c-list"></div>
+      </section>
+
+      <!-- PRODUCTOS -->
+      <section class="view" id="view-productos">
+        <div class="view-head">
+          <div><h1>Productos</h1><p class="muted" id="p-count"></p></div>
+          <button class="btn primary" id="btn-add-product">+ Producto</button>
+        </div>
+        <input type="search" class="search" id="p-search" placeholder="Buscar producto…">
+        <div class="list" id="p-list"></div>
+      </section>
+
+      <!-- AJUSTES -->
+      <section class="view" id="view-ajustes">
+        <div class="view-head">
+          <div><h1>Ajustes</h1><p class="muted">Datos que aparecen en tus cotizaciones</p></div>
+        </div>
+        <form class="card form-grid" id="settings-form">
+          <h2 class="span-2">Datos del negocio</h2>
+          <label class="field span-2"><span>Nombre del negocio</span><input name="name" required></label>
+          <label class="field span-2"><span>Dirección</span><input name="address"></label>
+          <label class="field"><span>Teléfono</span><input name="phone" type="tel"></label>
+          <label class="field"><span>Correo</span><input name="email" type="email"></label>
+          <h2 class="span-2">Cotizaciones</h2>
+          <label class="field"><span>Prefijo del folio</span><input name="prefix"></label>
+          <label class="field"><span>Siguiente número</span><input name="nextFolio" type="number" min="1" step="1" required></label>
+          <label class="field"><span>IVA (%)</span><input name="iva" type="number" min="0" step="0.01" required></label>
+          <label class="field"><span>Plantilla por defecto</span><select name="template" id="s-template"></select></label>
+          <label class="field span-2"><span>Notas al pie de la cotización (opcional)</span><textarea name="notes" rows="2" placeholder="Ej. Precios sujetos a cambio sin previo aviso."></textarea></label>
+          <div class="span-2"><button class="btn primary" type="submit">Guardar ajustes</button></div>
+        </form>
+        <div class="card">
+          <h2>Respaldo</h2>
+          <p class="muted small">Tus datos se guardan en este dispositivo. Descarga un respaldo para pasarlos a otro equipo o no perderlos.</p>
+          <div class="btn-row">
+            <button class="btn" id="btn-backup">Descargar respaldo</button>
+            <label class="btn">Restaurar respaldo<input type="file" id="file-restore" accept="application/json,.json" hidden></label>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal genérico para clientes / productos -->
+  <dialog id="dlg-form" class="dialog">
+    <form method="dialog" id="dlg-form-body">
+      <h2 id="dlg-form-title"></h2>
+      <div id="dlg-form-fields" class="form-grid"></div>
+      <div class="dialog-actions">
+        <button class="btn ghost" type="button" id="dlg-form-cancel">Cancelar</button>
+        <button class="btn primary" value="ok" id="dlg-form-ok">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Exportación -->
+  <dialog id="dlg-export" class="dialog wide">
+    <div class="export-wrap">
+      <div class="export-head">
+        <h2>Exportar cotización</h2>
+        <button class="icon-btn" id="btn-close-export" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="tpl-picker" id="tpl-picker" role="radiogroup" aria-label="Plantilla"></div>
+      <div class="preview" id="preview"><div class="preview-inner" id="preview-inner"></div></div>
+      <div class="export-actions">
+        <button class="btn primary" id="btn-print">Descargar PDF / Imprimir</button>
+      </div>
+      <p class="muted small center">En el diálogo de impresión elige <b>“Guardar como PDF”</b>. En celular, usa <b>Compartir → Imprimir</b> o “Guardar como PDF”.</p>
+    </div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="print-root"></div>
+  <style id="page-style"></style>
+
+  <script src="app.js"></script>
+</body>
+</html>
