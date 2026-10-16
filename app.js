@@ -1,29 +1,28 @@
-/* Cotizador Vidriera Gómez — app 100% estática; los datos viven en localStorage. */
+/* Cotizador Vidriera Gómez — cada usuario guarda sus datos en su cuenta (Firebase). */
+import * as Cloud from './cloud.js';
+
 (() => {
   'use strict';
 
-  const STORE_KEY = 'cotizador-vidriera-v1';
+  // Datos de la versión anterior (sin cuentas) que vivían solo en este navegador
+  const LEGACY_KEY = 'cotizador-vidriera-v1';
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
   // ---------- Datos iniciales (tomados del Google Sheets) ----------
   const SEED = {
     settings: {
-      name: 'Vidriera Gómez',
-      address: 'Ocoyucan, Puebla',
-      phone: '222-222-2222',
-      email: 'alberto@gmail.com',
+      name: 'Mi negocio',
+      address: '',
+      phone: '',
+      email: '',
       prefix: 'COT00',
-      nextFolio: 221,
+      nextFolio: 1,
       iva: 16,
       template: 'clasica',
       notes: '',
     },
-    clients: [
-      { id: 1, name: 'Fernando Torres', address: 'Calle 19 #204', phone: '8114802905', email: 'f.torresg123@gmail.com' },
-      { id: 2, name: 'Fernando Guzman', address: 'Olmos 401', phone: '8114554555', email: 'fertorresg123@gmail.com' },
-      { id: 3, name: 'FER', address: 'PUEBLA', phone: '2223334444', email: 'PRUEBA@GMAIL.COM' },
-    ],
+    clients: [],
     products: [
       ['Perfil Aluminio 2"', 'Línea 2 Pulgadas', 1300],
       ['Perfil Aluminio 3"', 'Línea 3 Pulgadas', 1500],
@@ -56,23 +55,18 @@
   ];
 
   // ---------- Estado ----------
-  let db = load();
+  let db = null;
   let editingQuoteId = null; // id de cotización guardada que se está editando (null = nueva)
 
-  function load() {
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        const data = JSON.parse(raw);
-        return { ...structuredClone(SEED), ...data, settings: { ...SEED.settings, ...data.settings } };
-      }
-    } catch (e) { /* almacenamiento no disponible o dañado: usar semilla */ }
-    return structuredClone(SEED);
-  }
-  function save() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
-    catch (e) { toast('No se pudo guardar en este dispositivo'); }
-  }
+  const normalize = (data) => ({
+    ...structuredClone(SEED), ...data,
+    settings: { ...SEED.settings, ...data.settings },
+    quotes: Array.isArray(data.quotes) ? data.quotes : [],
+  });
+  const mainPart = () => ({ settings: db.settings, clients: db.clients, products: db.products, draft: db.draft });
+  // Guarda ajustes, catálogos y borrador; las cotizaciones se guardan una por una.
+  function save() { Cloud.saveMain(mainPart()); }
+  const cloudErr = (e) => { console.error(e); toast(Cloud.errorText(e)); };
   const nextId = (arr) => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
 
   // ---------- Utilidades ----------
@@ -118,7 +112,6 @@
   function blankDraft() {
     return { folio: null, date: today(), clientId: null, client: null, items: [{ productId: null, qty: 1 }] };
   }
-  if (!db.draft) db.draft = blankDraft();
 
   const q = () => db.draft;
 
@@ -318,6 +311,7 @@
       db.settings.nextFolio = Number(db.settings.nextFolio) + 1;
       toast(`${quote.folio} guardada`);
     }
+    Cloud.putQuote(quote).catch(cloudErr);
     // Queda abierta en modo edición para poder exportarla
     editingQuoteId = quote.id;
     db.draft = quoteToDraft(quote);
@@ -379,6 +373,7 @@
       openExport(quote);
     } else if (btn.dataset.act === 'del' && confirm(`¿Eliminar la cotización ${quote.folio}?`)) {
       db.quotes = db.quotes.filter((x) => x.id !== id);
+      Cloud.removeQuote(id).catch(cloudErr);
       if (editingQuoteId === id) { editingQuoteId = null; db.draft = blankDraft(); renderQuote(); }
       save(); renderHistory();
     }
@@ -542,12 +537,13 @@
     try {
       const data = JSON.parse(await file.text());
       if (!Array.isArray(data.clients) || !Array.isArray(data.products) || !data.settings) throw new Error('formato');
-      if (!confirm('Esto reemplazará los datos actuales de este dispositivo. ¿Continuar?')) return;
-      db = { ...structuredClone(SEED), ...data, settings: { ...SEED.settings, ...data.settings } };
+      if (!confirm('Esto reemplazará todos los datos de tu cuenta. ¿Continuar?')) return;
+      db = normalize(data);
       if (!db.draft) db.draft = blankDraft();
       editingQuoteId = null;
-      save(); renderSettings(); renderQuote(); toast('Respaldo restaurado');
-    } catch (err) { toast('Archivo de respaldo no válido'); }
+      await Cloud.replaceAll(mainPart(), db.quotes);
+      renderSettings(); renderQuote(); toast('Respaldo restaurado');
+    } catch (err) { toast(err.message === 'formato' || err instanceof SyntaxError ? 'Archivo de respaldo no válido' : Cloud.errorText(err)); }
   });
 
   // =====================================================================
@@ -689,7 +685,7 @@
 
   // ---------- Diálogo de exportación ----------
   let exportQuote = null;
-  let exportTpl = db.settings.template;
+  let exportTpl = 'clasica';
 
   function openExport(quote) {
     exportQuote = quote;
@@ -751,11 +747,99 @@
     window.print();
   });
 
-  // ---------- Inicio ----------
-  renderQuote();
-  // Recupera la cotización en edición si el borrador ya tenía folio guardado
-  if (db.draft?.folio) {
-    const match = db.quotes.find((x) => x.folio === db.draft.folio);
-    if (match) { editingQuoteId = match.id; renderQuote(); }
+  // =====================================================================
+  // CUENTAS (entrar / crear cuenta / salir)
+  // =====================================================================
+  let authMode = 'login';
+  function setAuthMode(mode) {
+    authMode = mode;
+    $$('#auth .auth-tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.mode === mode));
+    $('#auth-submit').textContent = mode === 'login' ? 'Entrar' : 'Crear cuenta';
+    $('#auth-pass').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+    $('#auth-forgot').hidden = mode !== 'login';
+    authMsg('');
   }
+  function authMsg(text, ok = false) {
+    const m = $('#auth-msg');
+    m.textContent = text;
+    m.classList.toggle('ok', ok);
+  }
+  // state: 'loading' | 'form' | 'hidden'
+  function showAuth(state) {
+    document.body.classList.toggle('signed-out', state !== 'hidden');
+    $('#auth').hidden = state === 'hidden';
+    $('#auth-form').hidden = state !== 'form';
+    $('#auth-loading').hidden = state !== 'loading';
+  }
+  $$('#auth .auth-tab').forEach((t) => t.addEventListener('click', () => setAuthMode(t.dataset.mode)));
+  $('#auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#auth-submit');
+    btn.disabled = true; authMsg('');
+    try {
+      const email = $('#auth-email').value.trim();
+      const pass = $('#auth-pass').value;
+      if (authMode === 'login') await Cloud.signIn(email, pass);
+      else await Cloud.signUp(email, pass);
+    } catch (err) { authMsg(Cloud.errorText(err)); }
+    btn.disabled = false;
+  });
+  $('#auth-forgot').addEventListener('click', async () => {
+    const email = $('#auth-email').value.trim();
+    if (!email) { authMsg('Escribe tu correo y vuelve a tocar “¿Olvidaste tu contraseña?”.'); return; }
+    try { await Cloud.resetPassword(email); authMsg('Te enviamos un correo para cambiar tu contraseña.', true); }
+    catch (err) { authMsg(Cloud.errorText(err)); }
+  });
+  $('#btn-logout').addEventListener('click', async () => {
+    try { await Cloud.logOut(); } catch (err) { cloudErr(err); }
+  });
+
+  // Carga los datos de la cuenta; si es nueva, la crea con el catálogo de ejemplo
+  // o con los datos que este navegador tenía de la versión sin cuentas.
+  async function openAccount(user) {
+    showAuth('loading');
+    const { main, quotes } = await Cloud.loadAll();
+    if (!main) {
+      let legacy = null;
+      try { legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null'); } catch (e) { /* sin datos previos */ }
+      const useLegacy = Boolean(legacy?.settings) && confirm('Encontramos datos del cotizador guardados en este dispositivo. ¿Quieres pasarlos a tu cuenta?');
+      db = normalize(useLegacy ? legacy : SEED);
+      if (!db.draft) db.draft = blankDraft();
+      await Cloud.replaceAll(mainPart(), db.quotes);
+      if (useLegacy) { try { localStorage.removeItem(LEGACY_KEY); } catch (e) { /* nada que borrar */ } }
+    } else {
+      db = normalize({ ...main, quotes });
+      if (!db.draft) db.draft = blankDraft();
+    }
+    // Recupera la cotización en edición si el borrador ya tenía folio guardado
+    editingQuoteId = db.draft.folio ? (db.quotes.find((x) => x.folio === db.draft.folio)?.id ?? null) : null;
+    $('#account-email').textContent = user.email;
+    renderQuote();
+    showView('cotizar');
+    showAuth('hidden');
+  }
+
+  // ---------- Inicio ----------
+  setAuthMode('login');
+  if (!Cloud.configured) {
+    showAuth('loading');
+    $('#auth-loading').hidden = true;
+    authMsg('Falta configurar Firebase: pega tu configuración en firebase-config.js (ver README).');
+    return;
+  }
+  showAuth('loading');
+  Cloud.onUser(async (user) => {
+    if (!user) {
+      db = null;
+      $('#auth-pass').value = '';
+      showAuth('form');
+      return;
+    }
+    try { await openAccount(user); }
+    catch (err) {
+      cloudErr(err);
+      showAuth('form');
+      authMsg(Cloud.errorText(err));
+    }
+  });
 })();

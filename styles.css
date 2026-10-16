@@ -239,6 +239,32 @@ input[readonly] { background: var(--surface-2); font-weight: 600; }
 
 #print-root { display: none; }
 
+/* ============ Entrar / crear cuenta ============ */
+body.signed-out #app { display: none; }
+.auth {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top)) 16px 24px;
+  background: linear-gradient(160deg, var(--primary), #1b7f94);
+}
+.auth[hidden] { display: none; }
+.auth-card {
+  width: 100%; max-width: 380px; background: var(--surface); border-radius: 18px;
+  padding: 24px 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+}
+.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.auth-brand img { border-radius: 12px; }
+.auth-brand strong { display: block; font-size: 1.2rem; }
+.auth-brand span { color: var(--muted); font-size: .85rem; }
+#auth-form { display: grid; gap: 14px; }
+#auth-form[hidden], #auth-loading[hidden], #auth-forgot[hidden] { display: none; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 10px; padding: 4px; }
+.auth-tab { border: 0; background: none; padding: 9px; border-radius: 8px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.auth-tab[aria-selected="true"] { background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+.auth-msg { margin: 12px 0 0; font-size: .9rem; color: var(--danger); text-align: center; }
+.auth-msg:empty { display: none; }
+.auth-msg.ok { color: #157347; }
+.btn:disabled { opacity: .6; cursor: wait; }
+
 /* ============ Tablet / Desktop ============ */
 @media (min-width: 640px) {
   .form-grid { grid-template-columns: 1fr 1fr; }
@@ -386,7 +412,7 @@ input[readonly] { background: var(--surface-2); font-weight: 600; }
 /* ============ Impresión ============ */
 @media print {
   html, body { background: #fff !important; }
-  #app, dialog, #toast { display: none !important; }
+  #app, #auth, dialog, #toast { display: none !important; }
   #print-root { display: block !important; }
   #print-root .doc { box-shadow: none; min-height: 0; }
   #print-root .doc:not(.tpl-ticket) { min-height: 296mm; }

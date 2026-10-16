@@ -11,13 +11,32 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="signed-out">
+  <!-- Entrar / crear cuenta -->
+  <section id="auth" class="auth">
+    <div class="auth-card">
+      <div class="auth-brand"><img src="icon.svg" alt="" width="48" height="48"><div><strong>Cotizador</strong><span>Vidriera y aluminio</span></div></div>
+      <p class="muted center" id="auth-loading">Cargando…</p>
+      <form id="auth-form" hidden>
+        <div class="auth-tabs" role="tablist">
+          <button type="button" class="auth-tab" role="tab" data-mode="login" aria-selected="true">Entrar</button>
+          <button type="button" class="auth-tab" role="tab" data-mode="signup" aria-selected="false">Crear cuenta</button>
+        </div>
+        <label class="field"><span>Correo</span><input id="auth-email" type="email" autocomplete="email" inputmode="email" required></label>
+        <label class="field"><span>Contraseña (mínimo 6 caracteres)</span><input id="auth-pass" type="password" autocomplete="current-password" minlength="6" required></label>
+        <button class="btn primary block" id="auth-submit" type="submit">Entrar</button>
+        <button class="btn ghost block" id="auth-forgot" type="button">¿Olvidaste tu contraseña?</button>
+      </form>
+      <p class="auth-msg" id="auth-msg" role="alert"></p>
+    </div>
+  </section>
+
   <div id="app">
     <header class="topbar">
       <div class="brand">
         <img src="icon.svg" alt="" width="32" height="32">
         <div>
-          <strong id="brand-name">Vidriera Gómez</strong>
+          <strong id="brand-name">Cotizador</strong>
           <span>Cotizador</span>
         </div>
       </div>
@@ -150,8 +169,13 @@
           <div class="span-2"><button class="btn primary" type="submit">Guardar ajustes</button></div>
         </form>
         <div class="card">
+          <h2>Cuenta</h2>
+          <p class="muted small">Sesión iniciada como <b id="account-email"></b>. Tus datos se guardan en tu cuenta y los ves en cualquier dispositivo donde entres.</p>
+          <div class="btn-row"><button class="btn danger" id="btn-logout">Cerrar sesión</button></div>
+        </div>
+        <div class="card">
           <h2>Respaldo</h2>
-          <p class="muted small">Tus datos se guardan en este dispositivo. Descarga un respaldo para pasarlos a otro equipo o no perderlos.</p>
+          <p class="muted small">Descarga una copia de tus datos o restaura una copia anterior (reemplaza los datos de tu cuenta).</p>
           <div class="btn-row">
             <button class="btn" id="btn-backup">Descargar respaldo</button>
             <label class="btn">Restaurar respaldo<input type="file" id="file-restore" accept="application/json,.json" hidden></label>
@@ -193,6 +217,6 @@
   <div id="print-root"></div>
   <style id="page-style"></style>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
