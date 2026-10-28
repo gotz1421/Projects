@@ -36,7 +36,12 @@ object SttEngine {
      * toward given spellings (our personal-vocab glossary), the cloud equivalent of
      * whisper.cpp's initial_prompt. Optional; ignored when blank.
      */
-    suspend fun transcribe(settings: Settings, audio: File, biasPrompt: String? = null): String = withContext(Dispatchers.IO) {
+    suspend fun transcribe(
+        settings: Settings,
+        audio: File,
+        biasPrompt: String? = null,
+        language: String? = null,
+    ): String = withContext(Dispatchers.IO) {
         if (settings.sttKey.isBlank()) {
             throw IllegalStateException(tr("No hay clave de voz a texto. Abre los ajustes de VoiceFlow.", "No speech-to-text key set. Open VoiceFlow settings."))
         }
@@ -51,6 +56,10 @@ object SttEngine {
             .addFormDataPart("model", model)
             .addFormDataPart("response_format", "json")
             .apply { if (!biasPrompt.isNullOrBlank()) addFormDataPart("prompt", biasPrompt) }
+            // A fixed language keeps long takes from drifting; temperature 0 makes Whisper take
+            // its most likely reading instead of sampling, which is what curbs hallucinations.
+            .apply { if (!language.isNullOrBlank()) addFormDataPart("language", language) }
+            .addFormDataPart("temperature", "0")
             .build()
 
         val request = Request.Builder()

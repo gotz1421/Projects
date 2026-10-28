@@ -133,6 +133,8 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
     var polishLevel by remember { mutableStateOf(PolishLevel.OFF) }
     var vadAutoStop by remember { mutableStateOf(true) }
     var parakeetHotwordsExperimental by remember { mutableStateOf(false) }
+    var vocabHint by remember { mutableStateOf(false) }
+    var dictationLanguage by remember { mutableStateOf("auto") }
     var bubbleOnlyOnFields by remember { mutableStateOf(true) }
     var bubbleOpacity by remember { mutableStateOf(BubblePrefs.opacity(context)) }
     var snoozeMinutes by remember { mutableStateOf(BubblePrefs.snoozeMinutes(context)) }
@@ -180,6 +182,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
         deterministicCleanup = s.deterministicCleanup; polishLevel = s.polishLevel
         vadAutoStop = s.vadAutoStop; bubbleOnlyOnFields = s.bubbleOnlyOnFields
         parakeetHotwordsExperimental = s.parakeetHotwordsExperimental
+        vocabHint = s.vocabHint; dictationLanguage = s.dictationLanguage
         a11yEnabled = SetupUtils.accessibilityEnabled(context)
         notifOn = SetupUtils.notificationsGranted(context)
         micGranted = SetupUtils.micGranted(context)
@@ -234,6 +237,7 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
         vadAutoStop = vadAutoStop, bubbleOnlyOnFields = bubbleOnlyOnFields,
         hasCompletedOnboarding = true,
         parakeetHotwordsExperimental = parakeetHotwordsExperimental,
+        vocabHint = vocabHint, dictationLanguage = dictationLanguage,
     )
 
     // Persist silently on every change (the design saves immediately).
@@ -445,6 +449,37 @@ private fun SettingsScreen(repo: SettingsRepository, launch: (suspend () -> Unit
                                 append(tr(" para transcribirlo.", " for transcription."))
                             }) { sttProvider = "local"; persist() }
                         }
+                    }
+                    Divider()
+                    // The language you speak. "Automatic" lets the recognizer guess; fixing it
+                    // keeps long dictations from drifting into another language.
+                    Padded {
+                        Label(tr("Idioma al dictar", "Dictation language"))
+                        Text(
+                            tr("Si siempre dictas en un idioma, elígelo: los dictados largos salen más precisos.",
+                                "If you always dictate in one language, pick it: long dictations come out more accurate."),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(11.dp))
+                        Segment(
+                            options = listOf("auto" to tr("Automático", "Automatic"), "es" to "Español", "en" to "English"),
+                            selected = dictationLanguage,
+                            onSelect = { dictationLanguage = it; persist() },
+                        )
+                    }
+                    if (sttProvider != "local" || !OnDeviceStt.isParakeet(OnDeviceStt.resolveModel(sttModel))) {
+                        Divider()
+                        ToggleRow(
+                            tr("Pista del diccionario (avanzado)", "Dictionary hint (advanced)"),
+                            tr("Le pasa tus palabras al reconocedor antes de transcribir. Puede ayudar con nombres raros, " +
+                                "pero a veces mete texto extraño en dictados largos. Tu diccionario corrige igual después " +
+                                "de transcribir, así que lo recomendable es dejarlo apagado.",
+                                "Gives your words to the recognizer before transcribing. It can help with unusual names, " +
+                                "but sometimes injects stray text into long dictations. Your dictionary still corrects " +
+                                "after transcription, so leaving this off is recommended."),
+                            vocabHint,
+                        ) { vocabHint = it; persist() }
                     }
                     Divider()
                     ToggleRow(tr("Detener al hacer pausa", "Auto-stop on pause"), tr("Termina la grabación cuando dejas de hablar", "End recording when you stop talking"), vadAutoStop) { vadAutoStop = it; persist() }

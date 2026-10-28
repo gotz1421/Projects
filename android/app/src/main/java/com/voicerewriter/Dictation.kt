@@ -207,15 +207,23 @@ object Dictation {
             try {
                 val assignments = withContext(Dispatchers.IO) { AppToneRepository(app).appAssignments() }
                 val vocab = VocabRepository(app).get()
-                // Personal vocab biases decoding on both backends, then snaps remaining
-                // near-misses afterwards.
-                val bias = if (vocab.isEmpty()) null else VocabCorrector.biasPrompt(vocab)
+                // The dictionary is applied after transcription (VocabCorrector), always. Hinting
+                // the words to Whisper up front is optional and off by default: Whisper tends to
+                // echo that hint into long transcripts ("Glossary OptiPluss" mid-sentence) or
+                // stall on it and drop the rest.
+                val hint = if (s.vocabHint && vocab.isNotEmpty()) VocabCorrector.whisperHint(vocab) else null
+                val language = s.dictationLanguage.takeIf { it == "es" || it == "en" }
                 val raw = if (s.sttProvider == "local") {
-                    OnDeviceStt.transcribe(app, s, WavIo.toFloats(samples), bias)
+                    val onDeviceBias = if (OnDeviceStt.isParakeet(OnDeviceStt.resolveModel(s.sttModel)))
+                        VocabCorrector.biasPrompt(vocab).ifBlank { null } // Parakeet hotwords; gated by its own setting
+                    else hint
+                    OnDeviceStt.transcribe(app, s, WavIo.toFloats(samples), onDeviceBias)
                 } else {
-                    SttEngine.transcribe(s, PendingAudio.wavFile(app, recId!!), bias)
+                    transcribeCloud(s, samples, recId!!, hint, language)
                 }
-                val text = if (vocab.isEmpty()) raw else VocabCorrector.correct(raw, vocab)
+                // Belt and braces: strip any prompt text Whisper echoed back before it's inserted.
+                val clean = VocabCorrector.scrubPromptLeak(raw, hint)
+                val text = if (vocab.isEmpty()) clean else VocabCorrector.correct(clean, vocab)
                 if (text.isBlank()) fail(tr("No se escuchó nada. Inténtalo de nuevo.", "Empty transcript. Try again."))
                 else process(s, text, assignments)
             } catch (e: Exception) {
@@ -223,6 +231,31 @@ object Dictation {
                 fail(friendlyError(e))
             }
         }
+    }
+
+    /**
+     * Cloud transcription. A long take is sent in ~25-second pieces cut at pauses (see
+     * [AudioChunker]) and the texts are joined, instead of one long upload, which is where
+     * long dictations used to stop half-way.
+     */
+    private suspend fun transcribeCloud(
+        s: Settings, samples: ShortArray, recId: String, hint: String?, language: String?,
+    ): String {
+        val pieces = AudioChunker.split(samples)
+        if (pieces.size == 1) return SttEngine.transcribe(s, PendingAudio.wavFile(app, recId), hint, language)
+        val dir = java.io.File(app.cacheDir, "chunks").apply { mkdirs() }
+        val parts = ArrayList<String>()
+        try {
+            for ((i, range) in pieces.withIndex()) {
+                val f = java.io.File(dir, "$recId-$i.wav")
+                withContext(Dispatchers.IO) { WavIo.write(f, samples.copyOfRange(range.first, range.last + 1)) }
+                val t = SttEngine.transcribe(s, f, hint, language).trim()
+                if (t.isNotEmpty()) parts.add(t)
+            }
+        } finally {
+            withContext(Dispatchers.IO) { dir.listFiles()?.filter { it.name.startsWith("$recId-") }?.forEach { it.delete() } }
+        }
+        return parts.joinToString(" ")
     }
 
     private suspend fun process(s: Settings, spoken: String, assignments: Map<String, String>) {

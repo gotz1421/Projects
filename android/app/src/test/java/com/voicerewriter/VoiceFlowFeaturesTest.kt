@@ -73,4 +73,56 @@ class VoiceFlowFeaturesTest {
     fun `the em of 'em is not a filler`() {
         assertEquals("let 'em go", FillerWordRemover.removeFillers("let 'em go", emptyList()))
     }
+
+    // ---- "Glossary" prompt leaks and long takes ----
+
+    @Test
+    fun `an echoed Glossary label is removed mid-sentence`() {
+        val out = com.voicerewriter.textproc.VocabCorrector.scrubPromptLeak(
+            "mañana revisamos el reporte Glossary OptiPluss y luego lo mandamos")
+        assertEquals("mañana revisamos el reporte OptiPluss y luego lo mandamos", out)
+    }
+
+    @Test
+    fun `a trailing Glossary is dropped`() {
+        val out = com.voicerewriter.textproc.VocabCorrector.scrubPromptLeak("y eso fue todo lo que pasó. Glossary:")
+        assertEquals("y eso fue todo lo que pasó.", out)
+    }
+
+    @Test
+    fun `a whole echoed hint is removed but the word stays when really spoken`() {
+        val hint = "OptiPluss, Lauro."
+        val out = com.voicerewriter.textproc.VocabCorrector.scrubPromptLeak(
+            "hola equipo OptiPluss, Lauro. el lanzamiento de OptiPluss es mañana", hint)
+        assertEquals("hola equipo el lanzamiento de OptiPluss es mañana", out)
+    }
+
+    @Test
+    fun `the hint carries no label`() {
+        val vocab = listOf(com.voicerewriter.textproc.VocabEntry("OptiPluss"))
+        assertEquals("OptiPluss.", com.voicerewriter.textproc.VocabCorrector.whisperHint(vocab))
+    }
+
+    @Test
+    fun `short takes are sent whole`() {
+        val rate = 16000
+        assertEquals(1, AudioChunker.split(ShortArray(rate * 20), rate).size)
+    }
+
+    @Test
+    fun `long takes are cut at the quietest moment and cover every sample`() {
+        val rate = 16000
+        // 70 s of "speech" with silent gaps at 22 s and 47 s.
+        val s = ShortArray(rate * 70) { 3000 }
+        for (i in rate * 22 until rate * 22 + rate / 2) s[i] = 0
+        for (i in rate * 47 until rate * 47 + rate / 2) s[i] = 0
+        val parts = AudioChunker.split(s, rate)
+        assertTrue(parts.size >= 3)
+        assertEquals(0, parts.first().first)
+        assertEquals(s.size - 1, parts.last().last)
+        for (k in 1 until parts.size) assertEquals(parts[k - 1].last + 1, parts[k].first)
+        // The first cut lands inside the first silent gap.
+        assertTrue(parts[0].last + 1 in rate * 22..rate * 22 + rate / 2)
+        for (p in parts) assertTrue(p.count() <= rate * 29)
+    }
 }

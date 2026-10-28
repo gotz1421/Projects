@@ -75,6 +75,13 @@ data class Settings(
     // hallucinates or returns empty text on ~20% of NeMo-TDT requests; greedy_search (used
     // otherwise) is unaffected. See LocalParakeetStt for the full story.
     val parakeetHotwordsExperimental: Boolean = false,
+    // Whisper "prompt" hint with the dictionary words (cloud + on-device Whisper). Off by
+    // default: Whisper sometimes echoes that hint into long transcripts (the "Glossary …"
+    // bug) or stalls on it. The dictionary still corrects words after transcription.
+    val vocabHint: Boolean = false,
+    // Language the user dictates in: "auto", "es" or "en". Fixing it stops Whisper from
+    // drifting language mid-dictation on long takes.
+    val dictationLanguage: String = "auto",
 ) {
     /**
      * Whether to run the LLM polish layer on dictation. On by default — onboarding downloads
@@ -125,6 +132,8 @@ class SettingsRepository(private val context: Context) {
         val BUBBLE_ONLY_ON_FIELDS = booleanPreferencesKey("bubbleOnlyOnFields")
         val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("hasCompletedOnboarding")
         val PARAKEET_HOTWORDS_EXPERIMENTAL = booleanPreferencesKey("parakeetHotwordsExperimental")
+        val VOCAB_HINT = booleanPreferencesKey("vocabHintV1")
+        val DICTATION_LANGUAGE = stringPreferencesKey("dictationLanguage")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -148,6 +157,8 @@ class SettingsRepository(private val context: Context) {
             bubbleOnlyOnFields = p[Keys.BUBBLE_ONLY_ON_FIELDS] ?: defaults.bubbleOnlyOnFields,
             hasCompletedOnboarding = p[Keys.HAS_COMPLETED_ONBOARDING] ?: defaults.hasCompletedOnboarding,
             parakeetHotwordsExperimental = p[Keys.PARAKEET_HOTWORDS_EXPERIMENTAL] ?: defaults.parakeetHotwordsExperimental,
+            vocabHint = p[Keys.VOCAB_HINT] ?: defaults.vocabHint,
+            dictationLanguage = p[Keys.DICTATION_LANGUAGE] ?: defaults.dictationLanguage,
         )
     }
 
@@ -173,6 +184,8 @@ class SettingsRepository(private val context: Context) {
             p[Keys.BUBBLE_ONLY_ON_FIELDS] = s.bubbleOnlyOnFields
             p[Keys.HAS_COMPLETED_ONBOARDING] = s.hasCompletedOnboarding
             p[Keys.PARAKEET_HOTWORDS_EXPERIMENTAL] = s.parakeetHotwordsExperimental
+            p[Keys.VOCAB_HINT] = s.vocabHint
+            p[Keys.DICTATION_LANGUAGE] = s.dictationLanguage
         }
     }
 

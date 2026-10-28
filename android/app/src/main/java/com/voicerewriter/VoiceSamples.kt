@@ -39,7 +39,7 @@ object VoiceSamples {
         return if (s.sttProvider == "local") {
             OnDeviceStt.transcribe(ctx, s, WavIo.toFloats(samples), null)
         } else {
-            SttEngine.transcribe(s, wav, null)
+            SttEngine.transcribe(s, wav, null, s.dictationLanguage.takeIf { it == "es" || it == "en" })
         }
     }
 

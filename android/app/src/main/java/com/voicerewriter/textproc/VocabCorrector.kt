@@ -44,6 +44,34 @@ object VocabCorrector {
         return if (sb.endsWith(": ")) "" else sb.append(".").toString()
     }
 
+    /**
+     * The optional Whisper `prompt` hint: just the words, comma-separated, with no label.
+     * The old "Glossary: …" label was the part Whisper kept echoing back into long
+     * transcripts, so it's gone; the hint itself is off unless the user turns it on.
+     */
+    fun whisperHint(vocab: List<VocabEntry>, maxChars: Int = 160): String =
+        biasPrompt(vocab, maxChars + "Glossary: ".length).removePrefix("Glossary: ")
+
+    private val GLOSSARY = Regex("(?i)\\bglossary\\b\\s*[:.,]?")
+
+    /**
+     * Remove prompt text Whisper echoed into the transcript. "Glossary" is never something the
+     * user said in practice (it was our own label), so it always goes; if a [hint] was sent,
+     * whole copies of it go too. Then tidy the spaces and stray commas left behind.
+     */
+    fun scrubPromptLeak(text: String, hint: String? = null): String {
+        if (text.isBlank()) return text
+        var t = GLOSSARY.replace(text, " ")
+        val h = hint?.trim()?.trimEnd('.')?.trim().orEmpty()
+        if (h.length >= 4) t = Regex("(?i)" + Regex.escape(h) + "\\.?").replace(t, " ")
+        return t
+            .replace(Regex("\\s+([,.;:!?])"), "$1")
+            .replace(Regex("([,;:])(\\s*[,;:.])+"), "$1")
+            .replace(Regex("^[\\s,;:.]+"), "")
+            .replace(Regex("[ \\t]{2,}"), " ")
+            .trim()
+    }
+
     fun correct(text: String, vocab: List<VocabEntry>): String {
         if (text.isBlank() || vocab.isEmpty()) return text
         val toks = tokenize(text)
