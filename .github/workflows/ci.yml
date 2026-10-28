@@ -9,6 +9,8 @@ jobs:
   android:
     name: Android build & unit tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to publish the APK as a release with a direct download link
     steps:
       - uses: actions/checkout@v4
 
@@ -48,3 +50,22 @@ jobs:
           name: VoiceFlow-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # A direct, phone-friendly download: the same APK attached to a fixed release, so
+      # https://github.com/<repo>/releases/download/voiceflow-latest/VoiceFlow.apk always
+      # serves the newest build (workflow artifacts need a desktop login and come zipped).
+      - name: Rename APK for the release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/ccr-7c687cec-8yzxgu'
+        run: cp android/app/build/outputs/apk/debug/*.apk VoiceFlow.apk
+
+      - name: Publish APK as the latest release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/ccr-7c687cec-8yzxgu'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: voiceflow-latest
+          name: VoiceFlow (última versión)
+          make_latest: true
+          files: VoiceFlow.apk
+          body: |
+            Última versión de VoiceFlow, compilada desde la rama ccr-7c687cec-8yzxgu (commit ${{ github.sha }}).
+            Descarga VoiceFlow.apk e instálalo encima de la versión anterior.
